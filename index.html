@@ -551,6 +551,27 @@ html[lang="en"] .strip__title { letter-spacing: -.015em; }
 .rule { border: 0; border-top: 1px solid var(--line); margin: 4px 0; }
 .paybox { width: 100%; display: flex; flex-direction: column; gap: 8px; margin-top: 6px; }
 
+/* ---------- سطر المدى بأسهم بدل خانات التاريخ ---------- */
+
+.rangeline {
+  display: flex; align-items: center; gap: 8px;
+  background: var(--ink-2); border: 1px solid var(--line);
+  border-radius: 12px; padding: 6px;
+}
+.rangeline__text {
+  flex: 1; text-align: center;
+  font-family: var(--mono); font-size: .85rem; color: var(--text);
+}
+.nudge {
+  appearance: none; cursor: pointer; flex: none;
+  width: 36px; height: 36px; border-radius: 9px;
+  border: 1px solid var(--line); background: var(--surface);
+  color: var(--amber); font-size: 1.1rem; line-height: 1;
+  display: grid; place-items: center;
+}
+.nudge:hover { filter: brightness(1.2); }
+.nudge:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
+
 </style>
 </head>
 <body>
@@ -683,8 +704,8 @@ const DICT = {
     eachOf: (each, n) => `يطلع ${each} على الواحد · ${n} راكب`,
     totalOf: (total, n) => `الإجمالي ${total} · ${n} راكب`,
     noRiders: "مفيش ركاب متقبلين لسه.",
-    customDates: "تواريخ مخصّصة", useQuick: "رجّع للمدد الجاهزة",
-    rangeIs: "من ", rangeTo: " لـ ",
+    rangeArrow: "←", dayEarlier: "يوم بدري", dayLater: "يوم بعدين",
+    payPreview: "زرار الدفع", payPreviewHint: "ده اللي الركاب بيشوفوه. جرّبه واتأكد إنه بيفتح صح.",
     weekOf: (d) => `أسبوع ${d}`, fortnightOf: (d) => `أسبوعين من ${d}`, monthOf: (d) => `شهر ${d}`,
 
     // السعة
@@ -866,8 +887,8 @@ const DICT = {
     eachOf: (each, n) => `Works out to ${each} each · ${n} riders`,
     totalOf: (total, n) => `${total} in total · ${n} riders`,
     noRiders: "No approved riders yet.",
-    customDates: "Custom dates", useQuick: "Back to presets",
-    rangeIs: "From ", rangeTo: " to ",
+    rangeArrow: "→", dayEarlier: "One day earlier", dayLater: "One day later",
+    payPreview: "Pay button", payPreviewHint: "This is what riders see. Try it and check it opens correctly.",
     weekOf: (d) => `Week of ${d}`, fortnightOf: (d) => `Two weeks from ${d}`, monthOf: (d) => `Month of ${d}`,
 
     capacity: "Bus capacity", seats: "seats",
@@ -2170,7 +2191,15 @@ function paint(shell) {
     )
   ));
 
-  if (isAdmin()) shell.append(newPeriodCard(shell));
+  if (isAdmin()) {
+    const pay = payButton();
+    if (pay) shell.append(el("section", { class: "card card--note" },
+      el("h3", { class: "card__title", text: t("payPreview") }),
+      el("p", { class: "hint", text: t("payPreviewHint") }),
+      pay
+    ));
+    shell.append(newPeriodCard(shell));
+  }
 
   if (!periods.length) {
     shell.append(el("p", { class: "empty", text: isAdmin() ? t("noPeriodsAdmin") : t("noPeriods") }));
@@ -2304,7 +2333,6 @@ function newPeriodCard(shell) {
     { key: "month", days: 30, label: () => t("quickMonth"), name: (d) => t("monthOf", d) },
   ];
   let preset = PRESETS[0];
-  let custom = false;
   let mode = "each";
 
   const endISO = () => shift(startISO, preset.days - 1);
@@ -2317,9 +2345,9 @@ function newPeriodCard(shell) {
     if (!nameTouched) label.value = preset.name(niceDay(startISO));
   };
 
-  const rangeText = el("p", { class: "rangeline" });
+  const rangeText = el("span", { class: "rangeline__text" });
   const drawRange = () => {
-    rangeText.textContent = `${t("rangeIs")}${niceDay(startISO)}${t("rangeTo")}${niceDay(endISO())}`;
+    rangeText.textContent = `${niceDay(startISO)} ${t("rangeArrow")} ${niceDay(endISO())}`;
   };
 
   const chips = el("div", { class: "chiprow" });
@@ -2333,27 +2361,12 @@ function newPeriodCard(shell) {
     });
   };
 
-  // التواريخ المخصّصة: مخفية، وبتظهر بس لو طلبها
-  const startIn = el("input", { class: "input input--sm mono", type: "date", value: startISO });
-  const endIn = el("input", { class: "input input--sm mono", type: "date", value: endISO() });
-  const customBox = el("div", { class: "customdates is-hidden" },
-    el("label", { class: "field field--tight" },
-      el("span", { class: "field__label", text: t("fromDate") }), startIn),
-    el("label", { class: "field field--tight" },
-      el("span", { class: "field__label", text: t("toDate") }), endIn)
-  );
-  startIn.addEventListener("change", () => { if (startIn.value) startISO = startIn.value; });
-
-  const toggleCustom = el("button", { class: "linkbtn", type: "button", text: t("customDates") });
-  toggleCustom.addEventListener("click", () => {
-    custom = !custom;
-    customBox.classList.toggle("is-hidden", !custom);
-    chips.classList.toggle("is-hidden", custom);
-    rangeText.classList.toggle("is-hidden", custom);
-    toggleCustom.textContent = custom ? t("useQuick") : t("customDates");
-    if (custom) { startIn.value = startISO; endIn.value = endISO(); }
-    else if (startIn.value) { startISO = startIn.value; drawRange(); autoName(); }
-  });
+  // مفيش أي input[type=date] في التطبيق خالص — الأسهم بتحرّك يوم البداية
+  const nudge = (days, glyph, aria) =>
+    el("button", {
+      class: "nudge", type: "button", text: glyph, "aria-label": aria,
+      onclick: () => { startISO = shift(startISO, days); drawRange(); autoName(); },
+    });
 
   // ---- المبلغ ----
   const amount = el("input", {
@@ -2396,7 +2409,12 @@ function newPeriodCard(shell) {
     el("label", { class: "field field--tight" },
       el("span", { class: "field__label", text: t("periodLabelField") }), label),
 
-    chips, rangeText, customBox, toggleCustom,
+    chips,
+    el("div", { class: "rangeline" },
+      nudge(-1, "‹", t("dayEarlier")),
+      rangeText,
+      nudge(1, "›", t("dayLater"))
+    ),
 
     el("div", { class: "field field--tight" },
       el("div", { class: "field__row" },
@@ -2409,8 +2427,8 @@ function newPeriodCard(shell) {
     el("button", {
       class: "btn btn--primary btn--block btn--sm", type: "button", text: t("createPeriod"),
       onclick: async () => {
-        const sISO = custom ? startIn.value : startISO;
-        const eISO = custom ? endIn.value : endISO();
+        const sISO = startISO;
+        const eISO = endISO();
         if (!label.value.trim()) return toast(t("needLabel"), "bad");
         if (new Date(eISO) < new Date(sISO)) return toast(t("badDates"), "bad");
         const { error } = await sb.from("payment_periods").insert({
@@ -2486,8 +2504,9 @@ function paint(shell) {
     )
   ));
 
-  shell.append(capacityCard(shell));
   shell.append(requestsCard(shell));
+  shell.append(capacityCard(shell));
+  shell.append(paymentCard(shell));
   shell.append(membersCard(shell));
   shell.append(pointsCard(shell));
   const rej = rejectedCard(shell);
@@ -2533,24 +2552,6 @@ function capacityCard(shell) {
     save({ day_rate: v ? Number(v) : null });
   });
 
-  const payInput = el("input", {
-    class: "input input--sm", type: "text", dir: "ltr",
-    autocapitalize: "off", spellcheck: "false",
-    placeholder: "https://ipn.eg/…  أو  name@instapay",
-    value: state.settings?.payment_url || "",
-  });
-  payInput.addEventListener("change", () => {
-    const v = payInput.value.trim();
-    if (v && /^https?:\/\//i.test(v) && !/^https:\/\//i.test(v)) return toast(t("badPayUrl"), "bad");
-    save({ payment_url: v || null });
-  });
-
-  const payNoteInput = el("input", {
-    class: "input input--sm", type: "text", maxlength: "80",
-    placeholder: t("paymentNotePh"), value: state.settings?.payment_note || "",
-  });
-  payNoteInput.addEventListener("change", () => save({ payment_note: payNoteInput.value.trim() || null }));
-
   const tooSmall = cap && n > cap;
 
   return el("section", { class: `card ${tooSmall ? "card--note" : ""}` },
@@ -2582,13 +2583,45 @@ function capacityCard(shell) {
     ),
     el("p", { class: "hint", text: t("dayRateHint") }),
 
-    el("hr", { class: "rule" }),
+  );
+}
 
+// الدفع — كارت لوحده عشان يبان
+function paymentCard(shell) {
+  const save = async (patch) => {
+    const { error } = await sb.from("group_settings")
+      .update({ ...patch, updated_at: new Date().toISOString() }).eq("id", 1);
+    if (error) return toast(errText(error), "bad");
+    toast(t("saved"), "ok");
+    await reload(shell);
+  };
+
+  const payInput = el("input", {
+    class: "input input--sm", type: "text", dir: "ltr",
+    autocapitalize: "off", autocorrect: "off", spellcheck: "false",
+    placeholder: "https://ipn.eg/…   |   name@instapay",
+    value: state.settings?.payment_url || "",
+  });
+  payInput.addEventListener("change", () => {
+    const v = payInput.value.trim();
+    if (v && /^http:\/\//i.test(v)) return toast(t("badPayUrl"), "bad");
+    save({ payment_url: v || null });
+  });
+
+  const payNoteInput = el("input", {
+    class: "input input--sm", type: "text", maxlength: "80",
+    placeholder: t("paymentNotePh"), value: state.settings?.payment_note || "",
+  });
+  payNoteInput.addEventListener("change", () =>
+    save({ payment_note: payNoteInput.value.trim() || null }));
+
+  return el("section", { class: "card" },
+    el("h3", { class: "card__title", text: t("paymentLink") }),
+    el("p", { class: "hint", text: t("paymentLinkHint") }),
     el("label", { class: "field field--tight" },
       el("span", { class: "field__label", text: t("paymentLink") }), payInput),
     el("label", { class: "field field--tight" },
-      el("span", { class: "field__label", text: t("paymentNote") }), payNoteInput),
-    el("p", { class: "hint", text: t("paymentLinkHint") })
+      el("span", { class: "field__label", text: t("paymentNote") }), payNoteInput)
   );
 }
 
