@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-<title>الباص</title>
+<title>يلا بينا</title>
 <meta name="description" content="مين معانا النهاردة، والباص وصل فين." />
 <meta name="theme-color" content="#141824" />
 <meta name="mobile-web-app-capable" content="yes" />
@@ -444,6 +444,33 @@ html[lang="en"] .head__title,
 html[lang="en"] .auth__title,
 html[lang="en"] .strip__title { letter-spacing: -.015em; }
 
+/* ---------- حقول متلاصقة (شاشة الفلوس) ---------- */
+
+.field--tight { gap: 5px; }
+.field--tight .field__label { font-size: .74rem; letter-spacing: .02em; }
+
+.chiprow { display: flex; gap: 6px; flex-wrap: wrap; margin-top: -2px; }
+.chipbtn {
+  appearance: none; cursor: pointer;
+  border: 1px solid var(--line); background: transparent; color: var(--dim);
+  font-family: var(--sans); font-size: .78rem; padding: 6px 12px; border-radius: 999px;
+  transition: color .15s ease, border-color .15s ease;
+}
+.chipbtn:hover { color: var(--amber); border-color: var(--amber-dim); }
+.chipbtn:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
+
+/* خانة المبلغ بوحدة العملة جواها */
+.suffixed { position: relative; display: flex; align-items: center; }
+.suffixed .input { padding-inline-end: 46px; }
+.suffixed__unit {
+  position: absolute; inset-inline-end: 12px;
+  color: var(--dim); font-size: .8rem; pointer-events: none;
+}
+
+/* التواريخ جوه grid2 محتاجة تتساوى */
+.grid2 .field { min-width: 0; }
+.grid2 .input { width: 100%; }
+
 </style>
 </head>
 <body>
@@ -493,7 +520,7 @@ function arCount(n, one, two, few, many) {
 
 const DICT = {
   ar: {
-    appName: "الباص",
+    appName: "يلا بينا",
     tagline: "مين معانا النهاردة، والباص وصل فين.",
 
     // عام
@@ -567,6 +594,9 @@ const DICT = {
     outstanding: "المتأخر عليك", paidBadge: "مدفوع", dueBadge: "متأخر",
     newPeriod: "فترة جديدة", periodName: "اسم الفترة (مثلاً أسبوع ٣ أغسطس)",
     amountPerPerson: "المبلغ للفرد", createPeriod: "اعمل الفترة",
+    fromDate: "من", toDate: "لـ", periodLabelField: "اسم الفترة",
+    amountField: "المبلغ على كل واحد", badDates: "تاريخ النهاية لازم يبقى بعد البداية.",
+    quickWeek: "أسبوع", quickFortnight: "أسبوعين", quickMonth: "شهر",
     periodCreated: "الفترة اتعملت.", needLabel: "اكتب اسم للفترة.",
     deletePeriod: "امسح الفترة دي", deleted: "اتمسحت.",
     confirmDeletePeriod: "تمسح الفترة دي وكل الدفعات اللي فيها؟",
@@ -643,7 +673,7 @@ const DICT = {
   },
 
   en: {
-    appName: "The Bus",
+    appName: "Let's Go",
     tagline: "Who's riding today, and where the bus is.",
 
     save: "Save", saved: "Saved.", del: "Delete", add: "Add", send: "Send",
@@ -709,6 +739,9 @@ const DICT = {
     outstanding: "Outstanding", paidBadge: "Paid", dueBadge: "Due",
     newPeriod: "New period", periodName: "Period name (e.g. week of 3 Aug)",
     amountPerPerson: "Amount per person", createPeriod: "Create period",
+    fromDate: "From", toDate: "To", periodLabelField: "Period name",
+    amountField: "Amount each person pays", badDates: "The end date has to come after the start.",
+    quickWeek: "1 week", quickFortnight: "2 weeks", quickMonth: "1 month",
     periodCreated: "Period created.", needLabel: "Give the period a name.",
     deletePeriod: "Delete this period", deleted: "Deleted.",
     confirmDeletePeriod: "Delete this period and every payment in it?",
@@ -1156,7 +1189,6 @@ return {renderSetup};
 /* ===== auth.js ===== */
 const __mod_auth = (function () {
 const {sb, el, clear, toast, errText, CONFIG} = __mod_core;
-const {renderSetup} = __mod_setup;
 const {t, langToggle} = __mod_i18n;
 function renderAuth(root) {
   clear(root);
@@ -1243,11 +1275,7 @@ function renderAuth(root) {
         el("span", { class: "auth__line" })
       ),
       langToggle(el),
-      title, sub, form,
-      el("button", {
-        class: "linkbtn linkbtn--center", type: "button", text: t("connSettings"),
-        onclick: () => renderSetup(root, { reconfigure: true }),
-      })
+      title, sub, form
     )
   );
 }
@@ -1971,19 +1999,68 @@ function paint(shell) {
 }
 
 function newPeriodCard(shell) {
+  const shift = (iso, days) => {
+    const d = new Date(iso + "T12:00:00");
+    d.setDate(d.getDate() + days);
+    return todayISO(d);
+  };
+
   const label = el("input", { class: "input input--sm", type: "text", placeholder: t("periodName") });
   const start = el("input", { class: "input input--sm mono", type: "date", value: todayISO() });
-  const end = el("input", { class: "input input--sm mono", type: "date", value: todayISO() });
-  const amount = el("input", { class: "input input--sm mono", type: "number", min: "0", step: "5", placeholder: t("amountPerPerson") });
+  const end = el("input", { class: "input input--sm mono", type: "date", value: shift(todayISO(), 6) });
+  const amount = el("input", {
+    class: "input input--sm mono", type: "number", min: "0", step: "5",
+    inputmode: "numeric", placeholder: "0",
+  });
+
+  // لو غيّرت البداية، النهاية تتحرك معاها وتفضل نفس المدة
+  let span = 6;
+  start.addEventListener("change", () => {
+    if (start.value) end.value = shift(start.value, span);
+  });
+  end.addEventListener("change", () => {
+    if (start.value && end.value) {
+      const d = Math.round((new Date(end.value) - new Date(start.value)) / 86400000);
+      if (d >= 0) span = d;
+    }
+  });
+
+  // أزرار سريعة للمدد اللي بتتكرر
+  const quick = (days, text) =>
+    el("button", {
+      class: "chipbtn", type: "button", text,
+      onclick: () => { span = days - 1; end.value = shift(start.value || todayISO(), span); },
+    });
+
+  const field = (labelText, node) =>
+    el("label", { class: "field field--tight" },
+      el("span", { class: "field__label", text: labelText }), node);
 
   return el("section", { class: "card" },
     el("h3", { class: "card__title", text: t("newPeriod") }),
-    el("div", { class: "grid2" }, start, end),
-    label, amount,
+
+    field(t("periodLabelField"), label),
+
+    el("div", { class: "grid2" },
+      field(t("fromDate"), start),
+      field(t("toDate"), end)
+    ),
+    el("div", { class: "chiprow" },
+      quick(7, t("quickWeek")),
+      quick(14, t("quickFortnight")),
+      quick(30, t("quickMonth"))
+    ),
+
+    field(t("amountField"), el("div", { class: "suffixed" },
+      amount,
+      el("span", { class: "suffixed__unit mono", text: t("currency") })
+    )),
+
     el("button", {
       class: "btn btn--primary btn--block btn--sm", type: "button", text: t("createPeriod"),
       onclick: async () => {
         if (!label.value.trim()) return toast(t("needLabel"), "bad");
+        if (new Date(end.value) < new Date(start.value)) return toast(t("badDates"), "bad");
         const { error } = await sb.from("payment_periods").insert({
           label: label.value.trim(),
           start_date: start.value,
@@ -1992,6 +2069,7 @@ function newPeriodCard(shell) {
         });
         if (error) return toast(errText(error), "bad");
         toast(t("periodCreated"), "ok");
+        label.value = ""; amount.value = "";
         await load(); paint(shell);
       },
     })
@@ -2419,6 +2497,12 @@ const NAV = () => [
 boot();
 
 async function boot() {
+  // باب طوارئ مخفي: لو اتكتب #/connection في اللينك بالظبط
+  // (مش موجود في أي شاشة عشان محدش يدوس عليه بالغلط)
+  if (location.hash === "#/connection") {
+    renderSetup(app, { reconfigure: true });
+    return;
+  }
   if (!isConfigured()) {
     renderSetup(app);
     return;
