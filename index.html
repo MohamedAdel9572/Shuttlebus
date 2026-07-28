@@ -471,6 +471,47 @@ html[lang="en"] .strip__title { letter-spacing: -.015em; }
 .grid2 .field { min-width: 0; }
 .grid2 .input { width: 100%; }
 
+/* ---------- خانات التاريخ ---------- */
+/* الموبايل بيرندر input[type=date] بشكل مختلف تماماً عن باقي الخانات،
+   فمحتاجة تظبيط صريح عشان تبقى زيهم */
+
+.dates { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.dates .field { min-width: 0; }
+
+.input--date {
+  -webkit-appearance: none;
+  appearance: none;
+  min-height: 44px;
+  text-align: start;
+  display: block;
+  width: 100%;
+  font-size: .88rem;
+}
+/* iOS بيحط الليبل الداخلي في النص — نرجّعه لبداية السطر */
+.input--date::-webkit-date-and-time-value { text-align: start; margin: 0; }
+.input--date::-webkit-calendar-picker-indicator { opacity: .5; }
+
+/* ---------- مفتاح على الفرد / إجمالي ---------- */
+
+.field__row {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 10px; margin-bottom: 2px;
+}
+.segs {
+  display: flex; gap: 3px; padding: 3px;
+  background: var(--ink-2); border: 1px solid var(--line); border-radius: 999px;
+}
+.seg {
+  appearance: none; cursor: pointer; border: 0; background: transparent;
+  color: var(--dim); font-family: var(--sans); font-size: .74rem;
+  padding: 5px 11px; border-radius: 999px;
+  transition: background .15s ease, color .15s ease;
+}
+.seg.is-on { background: var(--surface-2); color: var(--amber); }
+.seg:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
+
+.hint--calc { color: var(--amber); min-height: 1.2em; margin-top: 2px; }
+
 </style>
 </head>
 <body>
@@ -595,8 +636,14 @@ const DICT = {
     newPeriod: "فترة جديدة", periodName: "اسم الفترة (مثلاً أسبوع ٣ أغسطس)",
     amountPerPerson: "المبلغ للفرد", createPeriod: "اعمل الفترة",
     fromDate: "من", toDate: "لـ", periodLabelField: "اسم الفترة",
-    amountField: "المبلغ على كل واحد", badDates: "تاريخ النهاية لازم يبقى بعد البداية.",
+    periodNameEg: "مثلاً: أسبوع ٣ أغسطس",
+    badDates: "تاريخ النهاية لازم يبقى بعد البداية.",
     quickWeek: "أسبوع", quickFortnight: "أسبوعين", quickMonth: "شهر",
+    amountField: "المبلغ",
+    modePerPerson: "على الفرد", modeTotal: "إجمالي",
+    eachOf: (each, n) => `يطلع ${each} على الواحد · ${n} راكب`,
+    totalOf: (total, n) => `الإجمالي ${total} · ${n} راكب`,
+    noRiders: "مفيش ركاب متقبلين لسه.",
     periodCreated: "الفترة اتعملت.", needLabel: "اكتب اسم للفترة.",
     deletePeriod: "امسح الفترة دي", deleted: "اتمسحت.",
     confirmDeletePeriod: "تمسح الفترة دي وكل الدفعات اللي فيها؟",
@@ -740,8 +787,14 @@ const DICT = {
     newPeriod: "New period", periodName: "Period name (e.g. week of 3 Aug)",
     amountPerPerson: "Amount per person", createPeriod: "Create period",
     fromDate: "From", toDate: "To", periodLabelField: "Period name",
-    amountField: "Amount each person pays", badDates: "The end date has to come after the start.",
+    periodNameEg: "e.g. week of 3 Aug",
+    badDates: "The end date has to come after the start.",
     quickWeek: "1 week", quickFortnight: "2 weeks", quickMonth: "1 month",
+    amountField: "Amount",
+    modePerPerson: "Per person", modeTotal: "Total",
+    eachOf: (each, n) => `Works out to ${each} each · ${n} riders`,
+    totalOf: (total, n) => `${total} in total · ${n} riders`,
+    noRiders: "No approved riders yet.",
     periodCreated: "Period created.", needLabel: "Give the period a name.",
     deletePeriod: "Delete this period", deleted: "Deleted.",
     confirmDeletePeriod: "Delete this period and every payment in it?",
@@ -1998,26 +2051,62 @@ function paint(shell) {
   });
 }
 
+function riderCount() {
+  return state.members.filter(
+    (m) => m.is_active && m.is_approved && !m.is_rejected && m.role !== "driver"
+  ).length;
+}
+
 function newPeriodCard(shell) {
   const shift = (iso, days) => {
     const d = new Date(iso + "T12:00:00");
     d.setDate(d.getDate() + days);
     return todayISO(d);
   };
+  const n = riderCount();
+  let mode = "each";           // each = المبلغ على الفرد | total = الإجمالي
 
-  const label = el("input", { class: "input input--sm", type: "text", placeholder: t("periodName") });
-  const start = el("input", { class: "input input--sm mono", type: "date", value: todayISO() });
-  const end = el("input", { class: "input input--sm mono", type: "date", value: shift(todayISO(), 6) });
+  const label = el("input", { class: "input input--sm", type: "text", placeholder: t("periodNameEg") });
+  const start = el("input", { class: "input input--sm input--date mono", type: "date", value: todayISO() });
+  const end = el("input", { class: "input input--sm input--date mono", type: "date", value: shift(todayISO(), 6) });
   const amount = el("input", {
-    class: "input input--sm mono", type: "number", min: "0", step: "5",
-    inputmode: "numeric", placeholder: "0",
+    class: "input input--sm mono", type: "number", min: "0", step: "1",
+    inputmode: "decimal", placeholder: "0",
   });
+  const preview = el("p", { class: "hint hint--calc" });
 
-  // لو غيّرت البداية، النهاية تتحرك معاها وتفضل نفس المدة
+  // الحساب: لو كاتب الإجمالي نقسّم، لو كاتب على الفرد نضرب
+  const perPerson = () => {
+    const v = Number(amount.value || 0);
+    if (!v || !n) return 0;
+    return mode === "total" ? Math.round((v / n) * 100) / 100 : v;
+  };
+  const fmt = (x) => (Math.round(x * 100) % 100 === 0 ? x.toFixed(0) : x.toFixed(2));
+
+  function refresh() {
+    if (!n) { preview.textContent = t("noRiders"); return; }
+    const v = Number(amount.value || 0);
+    if (!v) { preview.textContent = ""; return; }
+    preview.textContent = mode === "total"
+      ? t("eachOf", `${fmt(perPerson())} ${t("currency")}`, n)
+      : t("totalOf", `${fmt(v * n)} ${t("currency")}`, n);
+  }
+  amount.addEventListener("input", refresh);
+
+  const modeBtn = (key, text) =>
+    el("button", {
+      class: `seg ${mode === key ? "is-on" : ""}`, type: "button",
+      "aria-pressed": mode === key,
+      onclick: (e) => {
+        mode = key;
+        e.target.parentElement.querySelectorAll(".seg").forEach((b) => b.classList.remove("is-on"));
+        e.target.classList.add("is-on");
+        refresh();
+      },
+    }, text);
+
   let span = 6;
-  start.addEventListener("change", () => {
-    if (start.value) end.value = shift(start.value, span);
-  });
+  start.addEventListener("change", () => { if (start.value) end.value = shift(start.value, span); });
   end.addEventListener("change", () => {
     if (start.value && end.value) {
       const d = Math.round((new Date(end.value) - new Date(start.value)) / 86400000);
@@ -2025,7 +2114,6 @@ function newPeriodCard(shell) {
     }
   });
 
-  // أزرار سريعة للمدد اللي بتتكرر
   const quick = (days, text) =>
     el("button", {
       class: "chipbtn", type: "button", text,
@@ -2041,7 +2129,7 @@ function newPeriodCard(shell) {
 
     field(t("periodLabelField"), label),
 
-    el("div", { class: "grid2" },
+    el("div", { class: "dates" },
       field(t("fromDate"), start),
       field(t("toDate"), end)
     ),
@@ -2051,10 +2139,17 @@ function newPeriodCard(shell) {
       quick(30, t("quickMonth"))
     ),
 
-    field(t("amountField"), el("div", { class: "suffixed" },
-      amount,
-      el("span", { class: "suffixed__unit mono", text: t("currency") })
-    )),
+    el("div", { class: "field field--tight" },
+      el("div", { class: "field__row" },
+        el("span", { class: "field__label", text: t("amountField") }),
+        el("div", { class: "segs" }, modeBtn("each", t("modePerPerson")), modeBtn("total", t("modeTotal")))
+      ),
+      el("div", { class: "suffixed" },
+        amount,
+        el("span", { class: "suffixed__unit mono", text: t("currency") })
+      ),
+      preview
+    ),
 
     el("button", {
       class: "btn btn--primary btn--block btn--sm", type: "button", text: t("createPeriod"),
@@ -2065,11 +2160,11 @@ function newPeriodCard(shell) {
           label: label.value.trim(),
           start_date: start.value,
           end_date: end.value,
-          amount: Number(amount.value || 0),
+          amount: perPerson(),      // بنخزن دايماً نصيب الفرد
         });
         if (error) return toast(errText(error), "bad");
         toast(t("periodCreated"), "ok");
-        label.value = ""; amount.value = "";
+        label.value = ""; amount.value = ""; refresh();
         await load(); paint(shell);
       },
     })
