@@ -1,0 +1,2048 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>الباص</title>
+<meta name="description" content="مين معانا النهاردة، والباص وصل فين." />
+<meta name="theme-color" content="#141824" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+
+
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Reem+Kufi:wght@500;600;700&display=swap" rel="stylesheet" />
+
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
+<style>
+/* ============================================================
+   الباص — تصميم
+   اللوحة: ليل الطريق قبل الفجر + أصفر الكشافات
+   ============================================================ */
+
+:root {
+  --ink:        #141824;
+  --ink-2:      #10131d;
+  --surface:    #1c2230;
+  --surface-2:  #262e40;
+  --line:       #303a4f;
+  --amber:      #ffb340;
+  --amber-dim:  #6b4d1c;
+  --mint:       #4ecb9d;
+  --clay:       #f0736a;
+  --text:       #e9edf6;
+  --dim:        #8d98b3;
+
+  --r-sm: 8px;
+  --r:    14px;
+  --r-lg: 20px;
+
+  --pad: 16px;
+  --nav-h: 62px;
+
+  --sans: "IBM Plex Sans Arabic", system-ui, sans-serif;
+  --display: "Reem Kufi", "IBM Plex Sans Arabic", sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, monospace;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  background: var(--ink);
+  color: var(--text);
+  font-family: var(--sans);
+  font-size: 16px;
+  -webkit-text-size-adjust: 100%;
+  overscroll-behavior-y: none;
+}
+
+body { background-image: radial-gradient(120% 60% at 50% 0%, #1b2233 0%, var(--ink) 55%); }
+
+.mono { font-family: var(--mono); font-feature-settings: "tnum"; }
+
+/* ---------- الهيكل ---------- */
+
+.app { display: flex; flex-direction: column; height: 100dvh; }
+
+.screen {
+  flex: 1;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: var(--pad) var(--pad) calc(var(--nav-h) + 28px);
+}
+
+.view { display: flex; flex-direction: column; gap: 14px; max-width: 620px; margin: 0 auto; }
+.view--map { gap: 10px; height: 100%; }
+
+.boot {
+  display: flex; align-items: center; justify-content: center; gap: 10px;
+  min-height: 180px; color: var(--dim); font-size: .9rem;
+}
+.boot__dot {
+  width: 10px; height: 10px; border-radius: 50%;
+  background: var(--amber);
+  animation: pulse 1.1s ease-in-out infinite;
+}
+@keyframes pulse { 0%,100% { opacity: .25; transform: scale(.8); } 50% { opacity: 1; transform: scale(1); } }
+
+/* ---------- الترويسة ---------- */
+
+.head { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; padding-top: 4px; }
+.head__eyebrow {
+  margin: 0 0 2px; color: var(--dim); font-size: .78rem; letter-spacing: .04em;
+}
+.head__title { margin: 0; font-family: var(--display); font-size: 1.7rem; font-weight: 600; line-height: 1.1; }
+
+.count { display: flex; align-items: baseline; gap: 3px; }
+.count__num { font-family: var(--mono); font-size: 1.9rem; font-weight: 500; color: var(--amber); line-height: 1; }
+.count__of { font-family: var(--mono); font-size: .95rem; color: var(--dim); }
+
+/* ---------- تبويبات الاتجاه ---------- */
+
+.tabs {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 4px;
+  background: var(--surface); border: 1px solid var(--line);
+  border-radius: var(--r); padding: 4px;
+}
+.tab {
+  appearance: none; border: 0; background: transparent; color: var(--dim);
+  font-family: var(--sans); font-size: .95rem; font-weight: 500;
+  padding: 10px 8px; border-radius: 10px; cursor: pointer;
+  transition: background .15s ease, color .15s ease;
+}
+.tab.is-on { background: var(--surface-2); color: var(--text); }
+
+/* ---------- الكروت ---------- */
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  padding: 16px;
+  display: flex; flex-direction: column; gap: 12px;
+}
+.card__title { margin: 0; font-size: .95rem; font-weight: 600; letter-spacing: .01em; }
+.card__label { margin: 0; color: var(--dim); font-size: .8rem; }
+.card__head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.card--note { border-color: var(--amber-dim); }
+.card--sum { margin-top: 6px; }
+
+.hint { margin: 0; color: var(--dim); font-size: .8rem; line-height: 1.6; }
+.hint--warn { color: var(--amber); }
+.empty { color: var(--dim); text-align: center; padding: 40px 20px; line-height: 1.7; }
+
+/* ---------- الأزرار ---------- */
+
+.btn {
+  appearance: none; cursor: pointer;
+  font-family: var(--sans); font-size: .95rem; font-weight: 600;
+  padding: 12px 18px; border-radius: 12px;
+  border: 1px solid var(--line); background: var(--surface-2); color: var(--text);
+  transition: filter .15s ease, opacity .15s ease;
+}
+.btn:hover { filter: brightness(1.12); }
+.btn:disabled { opacity: .5; cursor: default; }
+.btn--primary { background: var(--amber); border-color: var(--amber); color: #241a06; }
+.btn--ghost { background: transparent; }
+.btn--danger { color: var(--clay); border-color: #4a2a2a; }
+.btn--block { width: 100%; }
+.btn--sm { padding: 9px 14px; font-size: .875rem; }
+
+.linkbtn {
+  appearance: none; border: 0; background: none; padding: 0;
+  color: var(--dim); font-family: var(--sans); font-size: .75rem;
+  text-decoration: underline; cursor: pointer;
+}
+
+.pillbtn {
+  appearance: none; cursor: pointer; border: 1px solid var(--line);
+  background: transparent; color: var(--dim);
+  font-family: var(--sans); font-size: .8rem; padding: 8px 12px; border-radius: 999px;
+}
+.pillbtn.is-on { color: var(--mint); border-color: #275544; background: #172b25; }
+
+/* ---------- معاكم / مش معاكم ---------- */
+
+.choices { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.choice {
+  appearance: none; cursor: pointer;
+  border: 1px solid var(--line); background: var(--surface-2); color: var(--dim);
+  border-radius: var(--r); padding: 18px 10px;
+  font-family: var(--sans); font-size: 1rem; font-weight: 600;
+  transition: background .18s ease, color .18s ease, border-color .18s ease;
+}
+.choice--in.is-on  { background: #17342a; border-color: var(--mint); color: var(--mint); }
+.choice--out.is-on { background: #3a1f1e; border-color: var(--clay); color: var(--clay); }
+
+/* ---------- الحقول ---------- */
+
+.field { display: flex; flex-direction: column; gap: 6px; }
+.field__label { color: var(--dim); font-size: .8rem; }
+.field.is-hidden { display: none; }
+
+.input, .select {
+  width: 100%;
+  font-family: var(--sans); font-size: 1rem; color: var(--text);
+  background: var(--ink-2); border: 1px solid var(--line);
+  border-radius: 12px; padding: 12px 14px;
+}
+.input--sm, .select { padding: 10px 12px; font-size: .9rem; }
+.input::placeholder { color: #5d6884; }
+.input:focus-visible, .select:focus-visible, .btn:focus-visible,
+.tab:focus-visible, .choice:focus-visible, .nav__item:focus-visible {
+  outline: 2px solid var(--amber); outline-offset: 2px;
+}
+.select { appearance: none; background-image: none; }
+.select--block { width: 100%; }
+
+.note-row { display: flex; gap: 8px; align-items: center; }
+.note-row .input { flex: 1; }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.grid-seq { display: grid; grid-template-columns: 62px 1fr; gap: 8px; }
+
+/* ---------- خط السير (العنصر المميز) ---------- */
+
+.strip { display: flex; flex-direction: column; gap: 0; margin-top: 6px; }
+.strip__title {
+  margin: 0 0 10px; font-family: var(--display); font-size: 1.05rem; font-weight: 600;
+  color: var(--dim);
+}
+
+.stop {
+  display: grid; grid-template-columns: 34px 1fr; gap: 12px;
+  position: relative; padding-bottom: 18px;
+}
+/* الخط الواصل بين المحطات */
+.stop::before {
+  content: ""; position: absolute; top: 30px; bottom: -4px;
+  inset-inline-start: 16px; width: 2px;
+  background: repeating-linear-gradient(to bottom, var(--line) 0 5px, transparent 5px 10px);
+}
+.stop:last-child::before { display: none; }
+
+.stop__marker {
+  width: 34px; height: 34px; border-radius: 50%;
+  display: grid; place-items: center;
+  background: var(--surface-2); border: 1.5px solid var(--amber);
+  color: var(--amber); font-family: var(--mono); font-size: .85rem;
+  position: relative; z-index: 1;
+}
+.stop.is-empty .stop__marker { border-color: var(--line); color: var(--dim); }
+
+.stop__body { padding-top: 3px; min-width: 0; }
+.stop__head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.stop__name { margin: 0 0 8px; font-size: 1rem; font-weight: 600; }
+.stop__count { font-family: var(--mono); font-size: .8rem; color: var(--dim); }
+
+.chips { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 6px 11px; border-radius: 999px;
+  font-size: .85rem; border: 1px solid var(--line); background: var(--surface);
+}
+.chip--in  { color: var(--text); border-color: #2b4b40; background: #16241f; }
+.chip--out { color: var(--dim); background: transparent; text-decoration: line-through; text-decoration-color: var(--clay); }
+.chip.is-me { box-shadow: inset 0 0 0 1px var(--amber); }
+.chip__name { max-width: 12ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chip__note { color: var(--amber); font-size: .72rem; }
+
+/* ---------- الملاحظات ---------- */
+
+.note { border-inline-start: 2px solid var(--amber); padding-inline-start: 10px; }
+.note__body { margin: 0 0 3px; font-size: .95rem; line-height: 1.5; }
+.note__foot { display: flex; align-items: center; gap: 10px; }
+.note__meta { margin: 0; color: var(--dim); font-size: .75rem; }
+
+/* ---------- الخريطة ---------- */
+
+.map {
+  flex: 1; min-height: 340px; border-radius: var(--r-lg);
+  overflow: hidden; border: 1px solid var(--line); background: var(--surface);
+}
+.leaflet-container { background: #0e1119; font-family: var(--sans); }
+.leaflet-control-zoom a { background: var(--surface) !important; color: var(--text) !important; border-color: var(--line) !important; }
+.leaflet-popup-content-wrapper, .leaflet-popup-tip { background: var(--surface-2); color: var(--text); }
+
+.track__status { min-height: 46px; }
+.track__actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.track__meta { display: flex; gap: 14px; margin-top: 6px; color: var(--dim); font-size: .82rem; }
+
+.pill {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 8px 14px; border-radius: 999px;
+  font-size: .85rem; border: 1px solid var(--line); background: var(--surface);
+}
+.pill__dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+.pill--live  { color: var(--mint); border-color: #275544; }
+.pill--live .pill__dot { animation: pulse 1.4s ease-in-out infinite; }
+.pill--stale { color: var(--amber); border-color: var(--amber-dim); }
+.pill--off   { color: var(--dim); }
+
+.bus-pin {
+  width: 28px; height: 28px; border-radius: 50%;
+  background: rgba(255,179,64,.22); display: grid; place-items: center;
+  animation: halo 1.8s ease-out infinite;
+}
+.bus-pin__core {
+  width: 14px; height: 14px; border-radius: 50%;
+  background: var(--amber); border: 2px solid #241a06;
+}
+.bus-pin.is-stale { animation: none; background: rgba(141,152,179,.2); }
+.bus-pin.is-stale .bus-pin__core { background: var(--dim); }
+@keyframes halo { 0% { box-shadow: 0 0 0 0 rgba(255,179,64,.45); } 100% { box-shadow: 0 0 0 16px rgba(255,179,64,0); } }
+
+.stop-pin {
+  width: 22px; height: 22px; border-radius: 50%;
+  background: var(--surface-2); border: 1.5px solid var(--amber);
+  color: var(--amber); display: grid; place-items: center;
+  font-family: var(--mono); font-size: .7rem;
+}
+
+/* ---------- الفلوس ---------- */
+
+.card--total { align-items: center; text-align: center; gap: 4px; }
+.total { margin: 0; font-family: var(--mono); font-size: 2.2rem; color: var(--amber); }
+.card--pay { flex-direction: row; align-items: center; justify-content: space-between; }
+.card--pay.is-paid { opacity: .6; }
+.pay__right { display: flex; align-items: center; gap: 10px; }
+.amount { font-size: 1.05rem; }
+.badge { font-size: .72rem; padding: 4px 9px; border-radius: 999px; border: 1px solid var(--line); }
+.badge--ok  { color: var(--mint); border-color: #275544; }
+.badge--due { color: var(--clay); border-color: #4a2a2a; }
+.tally { color: var(--dim); font-size: .82rem; white-space: nowrap; }
+
+.paylist { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.payitem { border-top: 1px solid var(--line); }
+.payitem:first-child { border-top: 0; }
+.check { display: flex; align-items: center; gap: 10px; padding: 11px 2px; cursor: pointer; }
+.check input { position: absolute; opacity: 0; width: 0; height: 0; }
+.check__box {
+  width: 20px; height: 20px; border-radius: 6px;
+  border: 1.5px solid var(--line); background: var(--ink-2); flex: none;
+  transition: background .15s ease, border-color .15s ease;
+}
+.check input:checked + .check__box {
+  background: var(--mint); border-color: var(--mint);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23132a22' stroke-width='3.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 6L9 17l-5-5'/%3E%3C/svg%3E");
+  background-size: 14px; background-position: center; background-repeat: no-repeat;
+}
+.check input:focus-visible + .check__box { outline: 2px solid var(--amber); outline-offset: 2px; }
+.check__name { font-size: .95rem; }
+.payitem.is-paid .check__name { color: var(--dim); }
+
+/* ---------- الإدارة ---------- */
+
+.rows { display: flex; flex-direction: column; }
+.row {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 12px 0; border-top: 1px solid var(--line); flex-wrap: wrap;
+}
+.row:first-child { border-top: 0; }
+.row--stack { flex-direction: column; align-items: stretch; }
+.row__main { min-width: 0; }
+.row__name { margin: 0; font-size: .95rem; font-weight: 600; }
+.row__sub { margin: 2px 0 0; color: var(--dim); font-size: .78rem; }
+.row__controls { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.row__controls .select { width: auto; min-width: 92px; }
+
+/* ---------- التنقل ---------- */
+
+.nav {
+  display: flex; justify-content: space-around; align-items: stretch;
+  height: var(--nav-h);
+  padding-bottom: env(safe-area-inset-bottom);
+  background: rgba(16,19,29,.92);
+  backdrop-filter: blur(12px);
+  border-top: 1px solid var(--line);
+  position: sticky; bottom: 0; z-index: 400;
+}
+.nav__item {
+  flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
+  color: var(--dim); text-decoration: none; font-size: .68rem;
+  border-top: 2px solid transparent;
+}
+.nav__item.is-on { color: var(--amber); border-top-color: var(--amber); }
+.nav__icon svg { width: 21px; height: 21px; display: block; }
+
+/* ---------- شاشة الدخول ---------- */
+
+.auth {
+  min-height: 100dvh; display: flex; flex-direction: column; justify-content: center;
+  gap: 6px; padding: 32px 22px calc(32px + env(safe-area-inset-bottom));
+  max-width: 420px; margin: 0 auto;
+}
+.auth__mark { display: flex; align-items: center; gap: 8px; margin-bottom: 20px; }
+.auth__dot { width: 12px; height: 12px; border-radius: 50%; background: var(--amber); flex: none; }
+.auth__line { height: 2px; flex: 1; background: repeating-linear-gradient(to left, var(--line) 0 6px, transparent 6px 12px); }
+.auth__title { margin: 0; font-family: var(--display); font-size: 2.4rem; font-weight: 700; }
+.auth__sub { margin: 0 0 22px; color: var(--dim); font-size: .95rem; }
+.auth__form { display: flex; flex-direction: column; gap: 12px; }
+.auth__msg { margin: 4px 0 0; color: var(--amber); font-size: .85rem; min-height: 1em; line-height: 1.6; }
+
+.input--area { resize: vertical; font-family: var(--mono); font-size: .78rem; line-height: 1.5; }
+
+.steps {
+  margin: 0 0 20px; padding-inline-start: 20px;
+  color: var(--dim); font-size: .85rem; line-height: 1.9;
+}
+.steps li { padding-inline-start: 4px; }
+.steps li::marker { color: var(--amber); font-family: var(--mono); }
+.steps strong { color: var(--text); font-weight: 600; }
+.steps .mono { color: var(--text); font-size: .8rem; }
+
+.linkbtn--center { display: block; margin: 18px auto 0; }
+
+/* ---------- التنبيهات ---------- */
+
+.toast {
+  position: fixed; inset-inline: 16px; bottom: calc(var(--nav-h) + 16px + env(safe-area-inset-bottom));
+  z-index: 900; margin: 0 auto; max-width: 420px;
+  padding: 13px 16px; border-radius: 12px;
+  background: var(--surface-2); border: 1px solid var(--line);
+  font-size: .9rem; text-align: center;
+  opacity: 0; transform: translateY(10px); pointer-events: none;
+  transition: opacity .2s ease, transform .2s ease;
+}
+.toast.is-on { opacity: 1; transform: translateY(0); }
+.toast--ok  { border-color: #275544; }
+.toast--bad { border-color: #4a2a2a; color: var(--clay); }
+
+/* ---------- شاشات أكبر ---------- */
+
+@media (min-width: 720px) {
+  .screen { padding: 24px 24px calc(var(--nav-h) + 32px); }
+  .head__title { font-size: 2rem; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .001ms !important; transition-duration: .001ms !important; }
+}
+
+</style>
+</head>
+<body>
+  <div id="app" class="app">
+    <div class="boot"><span class="boot__dot"></span></div>
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+  <script type="module">
+import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm";
+
+/* ===== config.js ===== */
+const __mod_config = (function () {
+
+// ============================================================
+//  الإعداد
+//  مش لازم تعدّل الملف ده خالص — التطبيق أول ما يفتح
+//  هيسألك على بيانات Supabase وهيحفظها في المتصفح.
+//
+//  لو بتظبط من كمبيوتر وعايز تحطهم هنا على طول، حطهم تحت
+//  في FALLBACK وهيشتغلوا لكل الناس من غير ما حد يدخل حاجة.
+// ============================================================
+
+const KEY = "bus.connection";
+
+const FALLBACK = {
+  url: "",   // مثال: https://xxxxx.supabase.co
+  key: "",   // الـ anon public key
+};
+
+function stored() {
+  try { return JSON.parse(localStorage.getItem(KEY) || "null"); }
+  catch { return null; }
+}
+
+const b64 = {
+  enc: (s) => btoa(unescape(encodeURIComponent(s))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, ""),
+  dec: (s) => decodeURIComponent(escape(atob(s.replace(/-/g, "+").replace(/_/g, "/")))),
+};
+
+// لو اللينك فيه بيانات الاتصال، خدها واحفظها ونضّف اللينك.
+// كده الأدمن بيظبط مرة واحدة، وبيبعت لينك واحد للجروب كله.
+(function adoptFromUrl() {
+  const m = location.hash.match(/setup=([A-Za-z0-9\-_]+)/);
+  if (!m) return;
+  try {
+    const [url, key] = b64.dec(m[1]).split("|");
+    if (url && key) {
+      localStorage.setItem(KEY, JSON.stringify({ url, key }));
+      history.replaceState(null, "", location.pathname + location.search);
+    }
+  } catch { /* لينك مش مظبوط — كمّل عادي */ }
+})();
+
+const saved = stored();
+
+const SUPABASE_URL = saved?.url || FALLBACK.url || "https://placeholder.supabase.co";
+const SUPABASE_ANON_KEY = saved?.key || FALLBACK.key || "placeholder";
+
+function isConfigured() {
+  const s = stored();
+  return !!((s?.url && s?.key) || (FALLBACK.url && FALLBACK.key));
+}
+
+function saveConnection(url, key) {
+  localStorage.setItem(KEY, JSON.stringify({ url: url.trim().replace(/\/+$/, ""), key: key.trim() }));
+}
+
+function clearConnection() {
+  localStorage.removeItem(KEY);
+}
+
+// لينك يخلي أي حد يتظبط أوتوماتيك من غير ما يكتب حاجة
+function shareLink() {
+  const s = stored() || FALLBACK;
+  if (!s.url || !s.key) return "";
+  return `${location.origin}${location.pathname}#setup=${b64.enc(s.url + "|" + s.key)}`;
+}
+
+const CONFIG = {
+  appName: "الباص",
+  locationPushMs: 10000,   // كل كام ملي ثانية نبعت مكان السواق
+  staleAfterSec: 60,       // بعد كام ثانية نعتبر المكان قديم
+  cutoffHourGo: 22,        // آخر ميعاد للتغيير قبل الرايحة (تنبيه بس)
+  defaultCenter: [30.0444, 31.2357],
+  defaultZoom: 12,
+};
+return {isConfigured, saveConnection, clearConnection, shareLink, SUPABASE_URL, SUPABASE_ANON_KEY, CONFIG};
+})();
+
+/* ===== core.js ===== */
+const __mod_core = (function () {
+const {SUPABASE_URL, SUPABASE_ANON_KEY, CONFIG} = __mod_config;
+const sb = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+  auth: { persistSession: true, autoRefreshToken: true },
+});
+
+// ---------- الحالة المشتركة ----------
+const state = {
+  session: null,
+  profile: null,
+  members: [],   // كل الـ profiles
+  points: [],    // المحطات
+};
+
+const isDriver = () => state.profile?.role === "driver";
+const isAdmin = () => state.profile?.role === "admin";
+const canDrive = () => isDriver() || isAdmin();
+
+// ---------- DOM ----------
+function el(tag, props = {}, ...kids) {
+  const node = document.createElement(tag);
+  for (const [k, v] of Object.entries(props || {})) {
+    if (v === null || v === undefined || v === false) continue;
+    if (k === "class") node.className = v;
+    else if (k === "text") node.textContent = v;
+    else if (k === "html") node.innerHTML = v;
+    else if (k.startsWith("on") && typeof v === "function") {
+      node.addEventListener(k.slice(2).toLowerCase(), v);
+    } else if (k === "dataset") {
+      Object.assign(node.dataset, v);
+    } else {
+      node.setAttribute(k, v === true ? "" : v);
+    }
+  }
+  for (const kid of kids.flat()) {
+    if (kid === null || kid === undefined || kid === false) continue;
+    node.append(kid instanceof Node ? kid : document.createTextNode(String(kid)));
+  }
+  return node;
+}
+
+function clear(node) {
+  while (node.firstChild) node.removeChild(node.firstChild);
+  return node;
+}
+
+// ---------- التاريخ والوقت ----------
+function todayISO(d = new Date()) {
+  const t = new Date(d.getTime() - d.getTimezoneOffset() * 60000);
+  return t.toISOString().slice(0, 10);
+}
+
+const AR_DAYS = ["الأحد", "الاتنين", "التلات", "الأربع", "الخميس", "الجمعة", "السبت"];
+const AR_MONTHS = ["يناير","فبراير","مارس","أبريل","مايو","يونيو","يوليو","أغسطس","سبتمبر","أكتوبر","نوفمبر","ديسمبر"];
+
+function prettyDate(iso) {
+  const d = new Date(iso + "T12:00:00");
+  return `${AR_DAYS[d.getDay()]} ${d.getDate()} ${AR_MONTHS[d.getMonth()]}`;
+}
+
+function shortDate(iso) {
+  const d = new Date(iso + "T12:00:00");
+  return `${d.getDate()}/${d.getMonth() + 1}`;
+}
+
+function clockTime(ts) {
+  const d = new Date(ts);
+  return d.toLocaleTimeString("ar-EG", { hour: "2-digit", minute: "2-digit" });
+}
+
+function agoText(ts) {
+  const sec = Math.max(0, Math.round((Date.now() - new Date(ts).getTime()) / 1000));
+  if (sec < 10) return "دلوقتي";
+  if (sec < 60) return `من ${sec} ثانية`;
+  const min = Math.round(sec / 60);
+  if (min < 60) return `من ${min} دقيقة`;
+  const hr = Math.round(min / 60);
+  if (hr < 24) return `من ${hr} ساعة`;
+  return `من ${Math.round(hr / 24)} يوم`;
+}
+
+function secondsSince(ts) {
+  return Math.round((Date.now() - new Date(ts).getTime()) / 1000);
+}
+
+// المسافة بالمتر بين نقطتين
+function distanceM(a, b) {
+  if (!a || !b) return null;
+  const R = 6371000, rad = Math.PI / 180;
+  const dLat = (b[0] - a[0]) * rad;
+  const dLng = (b[1] - a[1]) * rad;
+  const h =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(a[0] * rad) * Math.cos(b[0] * rad) * Math.sin(dLng / 2) ** 2;
+  return Math.round(2 * R * Math.asin(Math.sqrt(h)));
+}
+
+function prettyDistance(m) {
+  if (m === null) return "";
+  return m < 1000 ? `${m} متر` : `${(m / 1000).toFixed(1)} كم`;
+}
+
+// ---------- التنبيهات ----------
+let toastTimer;
+function toast(msg, kind = "ok") {
+  let box = document.getElementById("toast");
+  if (!box) {
+    box = el("div", { id: "toast", class: "toast", role: "status", "aria-live": "polite" });
+    document.body.append(box);
+  }
+  box.textContent = msg;
+  box.className = `toast toast--${kind} is-on`;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => box.classList.remove("is-on"), 3200);
+}
+
+function errText(error) {
+  const m = error?.message || String(error || "حصل خطأ");
+  if (/Failed to fetch|NetworkError/i.test(m)) return "مفيش نت. جرّب تاني.";
+  if (/Invalid login credentials/i.test(m)) return "الإيميل أو الباسورد غلط.";
+  if (/already registered/i.test(m)) return "الإيميل ده مسجّل قبل كده. سجّل دخول.";
+  if (/Password should be/i.test(m)) return "الباسورد لازم يبقى ٦ حروف على الأقل.";
+  if (/row-level security/i.test(m)) return "مالكش صلاحية على العملية دي.";
+  return m;
+}
+
+// ---------- جلب البيانات المشتركة ----------
+async function loadProfile() {
+  const { data, error } = await sb
+    .from("profiles")
+    .select("*")
+    .eq("id", state.session.user.id)
+    .maybeSingle();
+  if (error) throw error;
+  state.profile = data;
+  return data;
+}
+
+async function loadMembers() {
+  const { data, error } = await sb
+    .from("profiles")
+    .select("*")
+    .order("full_name");
+  if (error) throw error;
+  state.members = data || [];
+  return state.members;
+}
+
+async function loadPoints() {
+  const { data, error } = await sb
+    .from("pickup_points")
+    .select("*")
+    .order("seq");
+  if (error) throw error;
+  state.points = data || [];
+  return state.points;
+}
+
+function pointName(id) {
+  return state.points.find((p) => p.id === id)?.name || "من غير محطة";
+}
+
+function memberName(id) {
+  const m = state.members.find((x) => x.id === id);
+  return m?.full_name || "حد";
+}
+return {el, clear, todayISO, prettyDate, shortDate, clockTime, agoText, secondsSince, distanceM, prettyDistance, toast, errText, loadProfile, loadMembers, loadPoints, pointName, memberName, sb, state, isDriver, isAdmin, canDrive, CONFIG};
+})();
+
+/* ===== setup.js ===== */
+const __mod_setup = (function () {
+const {el, clear, CONFIG} = __mod_core;
+const {saveConnection, clearConnection} = __mod_config;
+function renderSetup(root, { reconfigure = false } = {}) {
+  clear(root);
+
+  const url = el("input", {
+    class: "input", type: "url", dir: "ltr", inputmode: "url",
+    autocapitalize: "off", autocorrect: "off", spellcheck: "false",
+    placeholder: "https://xxxxx.supabase.co",
+  });
+  const key = el("textarea", {
+    class: "input input--area", dir: "ltr", rows: "4",
+    autocapitalize: "off", autocorrect: "off", spellcheck: "false",
+    placeholder: "eyJhbGciOi...",
+  });
+  const msg = el("p", { class: "auth__msg", role: "alert" });
+
+  const save = el("button", { class: "btn btn--primary btn--block", type: "button", text: "اربط وابدأ" });
+  save.addEventListener("click", () => {
+    const u = url.value.trim().replace(/\/+$/, "");
+    const k = key.value.trim();
+    if (!/^https:\/\/[\w-]+\.supabase\.(co|in)$/.test(u)) {
+      msg.textContent = "الرابط شكله مش مظبوط. لازم يبقى زي https://xxxxx.supabase.co";
+      return;
+    }
+    if (k.split(".").length !== 3) {
+      msg.textContent = "المفتاح ناقص. خد الـ anon public key كامل من Project Settings ← API.";
+      return;
+    }
+    saveConnection(u, k);
+    location.reload();
+  });
+
+  root.append(
+    el("div", { class: "auth" },
+      el("div", { class: "auth__mark", "aria-hidden": "true" },
+        el("span", { class: "auth__dot" }), el("span", { class: "auth__line" })
+      ),
+      el("h1", { class: "auth__title", text: reconfigure ? "الاتصال" : CONFIG.appName }),
+      el("p", { class: "auth__sub", text: "خطوة واحدة بس، وبعدها مش هتشوف الشاشة دي تاني." }),
+
+      el("ol", { class: "steps" },
+        el("li", {}, "افتح ", el("span", { class: "mono", text: "supabase.com" }), " واعمل مشروع جديد — مجاني ومش بيطلب فيزا."),
+        el("li", {}, "من ", el("strong", { text: "SQL Editor" }), " الصق ملف ", el("span", { class: "mono", text: "schema.sql" }), " واضغط Run."),
+        el("li", {}, "من ", el("strong", { text: "Authentication ← Providers ← Email" }), " اقفل ", el("span", { class: "mono", text: "Confirm email" }), "."),
+        el("li", {}, "من ", el("strong", { text: "Project Settings ← API" }), " انسخ الاتنين اللي تحت.")
+      ),
+
+      el("label", { class: "field" },
+        el("span", { class: "field__label", text: "Project URL" }), url),
+      el("label", { class: "field" },
+        el("span", { class: "field__label", text: "anon public key" }), key),
+
+      save, msg,
+
+      el("p", { class: "hint", text: "الـ anon key دي public بطبيعتها، مش سر. اللي بيحمي الداتا هو الـ RLS اللي في schema.sql. متحطش الـ service_role key هنا أبداً." }),
+
+      reconfigure
+        ? el("button", {
+            class: "btn btn--ghost btn--block btn--sm", type: "button", text: "امسح الاتصال المحفوظ",
+            onclick: () => { clearConnection(); location.reload(); },
+          })
+        : null
+    )
+  );
+}
+return {renderSetup};
+})();
+
+/* ===== auth.js ===== */
+const __mod_auth = (function () {
+const {sb, el, clear, toast, errText, CONFIG} = __mod_core;
+const {renderSetup} = __mod_setup;
+function renderAuth(root) {
+  clear(root);
+  let mode = "login";
+
+  const title = el("h1", { class: "auth__title", text: CONFIG.appName });
+  const sub = el("p", { class: "auth__sub", text: "خط الشغل بتاعنا، في مكان واحد" });
+
+  const nameField = el("label", { class: "field is-hidden" },
+    el("span", { class: "field__label", text: "الاسم" }),
+    el("input", { class: "input", id: "f-name", type: "text", autocomplete: "name", placeholder: "اسمك زي ما الناس بتناديك" })
+  );
+  const emailField = el("label", { class: "field" },
+    el("span", { class: "field__label", text: "الإيميل" }),
+    el("input", { class: "input", id: "f-email", type: "email", autocomplete: "email", inputmode: "email", required: true, dir: "ltr" })
+  );
+  const passField = el("label", { class: "field" },
+    el("span", { class: "field__label", text: "الباسورد" }),
+    el("input", { class: "input", id: "f-pass", type: "password", autocomplete: "current-password", required: true, dir: "ltr", minlength: "6" })
+  );
+
+  const submit = el("button", { class: "btn btn--primary btn--block", type: "submit", text: "دخول" });
+  const swap = el("button", { class: "btn btn--ghost btn--block", type: "button", text: "معنديش حساب — سجّل" });
+  const msg = el("p", { class: "auth__msg", role: "alert" });
+
+  function setMode(next) {
+    mode = next;
+    const signup = mode === "signup";
+    nameField.classList.toggle("is-hidden", !signup);
+    submit.textContent = signup ? "اعمل حساب" : "دخول";
+    swap.textContent = signup ? "عندي حساب — دخول" : "معنديش حساب — سجّل";
+    passField.querySelector("input").autocomplete = signup ? "new-password" : "current-password";
+    msg.textContent = "";
+  }
+  swap.addEventListener("click", () => setMode(mode === "login" ? "signup" : "login"));
+
+  const form = el("form", { class: "auth__form" },
+    nameField, emailField, passField, submit, swap, msg
+  );
+
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const email = form.querySelector("#f-email").value.trim();
+    const pass = form.querySelector("#f-pass").value;
+    const name = form.querySelector("#f-name").value.trim();
+
+    if (mode === "signup" && !name) {
+      msg.textContent = "اكتب اسمك عشان السواق يعرفك.";
+      return;
+    }
+    submit.disabled = true;
+    submit.textContent = "ثانية واحدة…";
+
+    try {
+      if (mode === "signup") {
+        const { error } = await sb.auth.signUp({
+          email, password: pass,
+          options: { data: { full_name: name } },
+        });
+        if (error) throw error;
+        const { error: e2 } = await sb.auth.signInWithPassword({ email, password: pass });
+        if (e2) {
+          msg.textContent = "الحساب اتعمل. افتح إيميلك وأكّد الحساب وبعدين سجّل دخول.";
+          setMode("login");
+          return;
+        }
+      } else {
+        const { error } = await sb.auth.signInWithPassword({ email, password: pass });
+        if (error) throw error;
+      }
+      // onAuthStateChange في app.js هيكمّل من هنا
+    } catch (err) {
+      msg.textContent = errText(err);
+    } finally {
+      submit.disabled = false;
+      setMode(mode);
+    }
+  });
+
+  root.append(
+    el("div", { class: "auth" },
+      el("div", { class: "auth__mark", "aria-hidden": "true" },
+        el("span", { class: "auth__dot" }),
+        el("span", { class: "auth__line" })
+      ),
+      title, sub, form,
+      el("button", {
+        class: "linkbtn linkbtn--center", type: "button", text: "إعدادات الاتصال",
+        onclick: () => renderSetup(root, { reconfigure: true }),
+      })
+    )
+  );
+}
+return {renderAuth};
+})();
+
+/* ===== map.js ===== */
+const __mod_map = (function () {
+const {state, CONFIG, secondsSince} = __mod_core;
+// أيقونة الباص
+function busIcon(stale) {
+  return L.divIcon({
+    className: "",
+    html: `<div class="bus-pin ${stale ? "is-stale" : ""}"><span class="bus-pin__core"></span></div>`,
+    iconSize: [28, 28],
+    iconAnchor: [14, 14],
+  });
+}
+
+function stopIcon(seq) {
+  return L.divIcon({
+    className: "",
+    html: `<div class="stop-pin"><span>${seq}</span></div>`,
+    iconSize: [22, 22],
+    iconAnchor: [11, 11],
+  });
+}
+
+function createMap(container) {
+  const map = L.map(container, {
+    zoomControl: false,
+    attributionControl: true,
+  }).setView(CONFIG.defaultCenter, CONFIG.defaultZoom);
+
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    maxZoom: 19,
+    attribution: "&copy; OpenStreetMap",
+  }).addTo(map);
+
+  L.control.zoom({ position: "topleft" }).addTo(map);
+
+  let busMarker = null;
+  let meMarker = null;
+  let follow = true;
+  const stopMarkers = [];
+
+  map.on("dragstart", () => { follow = false; });
+
+  function drawStops() {
+    stopMarkers.forEach((m) => map.removeLayer(m));
+    stopMarkers.length = 0;
+    const withCoords = state.points.filter((p) => p.lat && p.lng);
+    withCoords.forEach((p, i) => {
+      const m = L.marker([p.lat, p.lng], { icon: stopIcon(p.seq || i + 1) })
+        .addTo(map)
+        .bindPopup(p.name);
+      stopMarkers.push(m);
+    });
+    if (withCoords.length > 1) {
+      const line = L.polyline(withCoords.map((p) => [p.lat, p.lng]), {
+        color: "#7c88a8",
+        weight: 3,
+        opacity: 0.4,
+        dashArray: "6 8",
+      });
+      line.addTo(map);
+      stopMarkers.push(line);
+    }
+    return withCoords;
+  }
+
+  function setBus(loc) {
+    if (!loc) {
+      if (busMarker) { map.removeLayer(busMarker); busMarker = null; }
+      return;
+    }
+    const stale = secondsSince(loc.updated_at) > CONFIG.staleAfterSec;
+    const pos = [loc.lat, loc.lng];
+    if (!busMarker) {
+      busMarker = L.marker(pos, { icon: busIcon(stale), zIndexOffset: 500 }).addTo(map);
+      map.setView(pos, 15);
+    } else {
+      busMarker.setLatLng(pos);
+      busMarker.setIcon(busIcon(stale));
+      if (follow) map.panTo(pos, { animate: true });
+    }
+  }
+
+  function setMe(pos) {
+    if (!pos) return;
+    if (!meMarker) {
+      meMarker = L.circleMarker(pos, {
+        radius: 7, color: "#ffb340", weight: 2, fillColor: "#ffb340", fillOpacity: 0.9,
+      }).addTo(map).bindPopup("إنت هنا");
+    } else {
+      meMarker.setLatLng(pos);
+    }
+  }
+
+  function fitAll() {
+    const pts = [];
+    if (busMarker) pts.push(busMarker.getLatLng());
+    if (meMarker) pts.push(meMarker.getLatLng());
+    state.points.filter((p) => p.lat && p.lng).forEach((p) => pts.push([p.lat, p.lng]));
+    if (pts.length) map.fitBounds(L.latLngBounds(pts).pad(0.25));
+    follow = false;
+  }
+
+  function recenterOnBus() {
+    if (busMarker) { follow = true; map.setView(busMarker.getLatLng(), 16); }
+  }
+
+  function destroy() { map.remove(); }
+
+  drawStops();
+  setTimeout(() => map.invalidateSize(), 120);
+
+  return { map, setBus, setMe, drawStops, fitAll, recenterOnBus, destroy };
+}
+return {createMap};
+})();
+
+/* ===== today.js ===== */
+const __mod_today = (function () {
+const {sb, state, el, clear, toast, errText, todayISO, prettyDate, clockTime,
+  agoText, canDrive, CONFIG, memberName,} = __mod_core;
+let channel = null;
+let direction = "go";
+let serviceDate = todayISO();
+let attendance = [];
+let notes = [];
+
+async function render(root) {
+  clear(root);
+  serviceDate = todayISO();
+  const shell = el("div", { class: "view" });
+  root.append(shell);
+  await refresh(shell);
+  subscribe(shell);
+}
+
+function destroy() {
+  if (channel) { sb.removeChannel(channel); channel = null; }
+}
+
+function subscribe(shell) {
+  destroy();
+  channel = sb
+    .channel("today")
+    .on("postgres_changes", { event: "*", schema: "public", table: "attendance" }, async () => {
+      await loadData();
+      paint(shell);
+    })
+    .on("postgres_changes", { event: "*", schema: "public", table: "notes" }, async () => {
+      await loadData();
+      paint(shell);
+    })
+    .subscribe();
+}
+
+async function loadData() {
+  const [att, nt] = await Promise.all([
+    sb.from("attendance").select("*").eq("service_date", serviceDate),
+    sb.from("notes").select("*").gt("expires_at", new Date().toISOString()).order("created_at", { ascending: false }).limit(10),
+  ]);
+  if (att.error) throw att.error;
+  attendance = att.data || [];
+  notes = nt.data || [];
+}
+
+async function refresh(shell) {
+  try {
+    await loadData();
+    paint(shell);
+  } catch (e) {
+    clear(shell);
+    shell.append(el("p", { class: "empty", text: errText(e) }));
+  }
+}
+
+function statusOf(userId, dir = direction) {
+  const row = attendance.find(
+    (a) => a.user_id === userId && a.direction === dir
+  );
+  return row ? row.status : "in"; // الافتراضي: معانا
+}
+
+function rowOf(userId, dir = direction) {
+  return attendance.find((a) => a.user_id === userId && a.direction === dir);
+}
+
+async function setMyStatus(shell, status, note) {
+  const payload = {
+    user_id: state.profile.id,
+    service_date: serviceDate,
+    direction,
+    status,
+    note: note || null,
+    updated_at: new Date().toISOString(),
+  };
+  const { error } = await sb
+    .from("attendance")
+    .upsert(payload, { onConflict: "user_id,service_date,direction" });
+  if (error) return toast(errText(error), "bad");
+
+  const idx = attendance.findIndex(
+    (a) => a.user_id === payload.user_id && a.direction === direction
+  );
+  if (idx >= 0) attendance[idx] = { ...attendance[idx], ...payload };
+  else attendance.push(payload);
+
+  paint(shell);
+  toast(status === "in" ? "تمام، إنت معانا" : "تمام، سجّلناك مش معانا", "ok");
+}
+
+// ============ الرسم ============
+
+function paint(shell) {
+  clear(shell);
+  shell.append(header());
+  shell.append(dirTabs(shell));
+  if (canDrive()) shell.append(noteComposer(shell));
+  if (state.profile.role !== "driver") shell.append(myCard(shell));
+  if (notes.length) shell.append(notesBlock(shell));
+  shell.append(routeStrip());
+}
+
+function noteComposer(shell) {
+  const body = el("input", {
+    class: "input input--sm", type: "text", maxlength: "140",
+    placeholder: "هتأخر ١٠ دقايق…",
+  });
+  const send = async () => {
+    const text = body.value.trim();
+    if (!text) return toast("اكتب الملاحظة الأول.", "bad");
+    const { error } = await sb.from("notes").insert({
+      author_id: state.profile.id,
+      body: text,
+      expires_at: new Date(Date.now() + 12 * 3600 * 1000).toISOString(),
+    });
+    if (error) return toast(errText(error), "bad");
+    body.value = "";
+    await loadData();
+    paint(shell);
+    toast("وصلت للناس.", "ok");
+  };
+  body.addEventListener("keydown", (e) => { if (e.key === "Enter") send(); });
+
+  return el("section", { class: "card" },
+    el("h3", { class: "card__title", text: "قول حاجة للركاب" }),
+    el("div", { class: "note-row" },
+      body,
+      el("button", { class: "btn btn--primary btn--sm", type: "button", text: "ابعت", onclick: send })
+    ),
+    el("p", { class: "hint", text: "الملاحظة بتختفي لوحدها بعد ١٢ ساعة." })
+  );
+}
+
+function header() {
+  const active = state.members.filter((m) => m.is_active && m.role !== "driver");
+  const inCount = active.filter((m) => statusOf(m.id) === "in").length;
+  return el("header", { class: "head" },
+    el("div", {},
+      el("p", { class: "head__eyebrow", text: prettyDate(serviceDate) }),
+      el("h2", { class: "head__title", text: direction === "go" ? "الرايحة" : "الرجعة" })
+    ),
+    el("div", { class: "count" },
+      el("span", { class: "count__num", text: String(inCount) }),
+      el("span", { class: "count__of", text: `/ ${active.length}` })
+    )
+  );
+}
+
+function dirTabs(shell) {
+  const mk = (key, label) =>
+    el("button", {
+      class: `tab ${direction === key ? "is-on" : ""}`,
+      type: "button",
+      "aria-pressed": direction === key,
+      onclick: () => { direction = key; paint(shell); },
+    }, label);
+  return el("div", { class: "tabs", role: "group", "aria-label": "الاتجاه" },
+    mk("go", "الرايحة"), mk("back", "الرجعة")
+  );
+}
+
+function myCard(shell) {
+  const me = state.profile;
+  const mine = statusOf(me.id);
+  const row = rowOf(me.id);
+  const noteInput = el("input", {
+    class: "input input--sm", type: "text", maxlength: "80",
+    placeholder: "ملاحظة للسواق (اختياري)", value: row?.note || "",
+  });
+
+  const btn = (status, label) =>
+    el("button", {
+      class: `choice choice--${status} ${mine === status ? "is-on" : ""}`,
+      type: "button",
+      "aria-pressed": mine === status,
+      onclick: () => setMyStatus(shell, status, noteInput.value.trim()),
+    },
+      el("span", { class: "choice__label", text: label })
+    );
+
+  const late = direction === "go" && new Date().getHours() >= CONFIG.cutoffHourGo;
+
+  return el("section", { class: "card" },
+    el("h3", { class: "card__title", text: "أنا النهاردة" }),
+    el("div", { class: "choices" }, btn("in", "معاكم"), btn("out", "مش معاكم")),
+    el("div", { class: "note-row" },
+      noteInput,
+      el("button", {
+        class: "btn btn--ghost btn--sm", type: "button", text: "احفظ",
+        onclick: () => setMyStatus(shell, mine, noteInput.value.trim()),
+      })
+    ),
+    row?.updated_at
+      ? el("p", { class: "hint", text: `آخر تعديل ${agoText(row.updated_at)}` })
+      : el("p", { class: "hint", text: "من غير ما تعمل حاجة إنت محسوب معانا." }),
+    late && mine === "out"
+      ? el("p", { class: "hint hint--warn", text: "غيّرت بعد ميعاد التأكيد — ابعت للسواق كمان." })
+      : null
+  );
+}
+
+function notesBlock(shell) {
+  return el("section", { class: "card card--note" },
+    el("h3", { class: "card__title", text: "من السواق" }),
+    ...notes.map((n) =>
+      el("div", { class: "note" },
+        el("p", { class: "note__body", text: n.body }),
+        el("div", { class: "note__foot" },
+          el("p", { class: "note__meta", text: `${memberName(n.author_id)} · ${clockTime(n.created_at)}` }),
+          n.author_id === state.profile.id
+            ? el("button", {
+                class: "linkbtn", type: "button", text: "امسح",
+                onclick: async () => {
+                  const { error } = await sb.from("notes").delete().eq("id", n.id);
+                  if (error) return toast(errText(error), "bad");
+                  await loadData();
+                  paint(shell);
+                },
+              })
+            : null
+        )
+      )
+    )
+  );
+}
+
+// العنصر المميز: خط السير بالمحطات والركاب على كل محطة
+function routeStrip() {
+  const riders = state.members.filter((m) => m.is_active && m.role !== "driver");
+  const buckets = state.points.map((p) => ({
+    point: p,
+    people: riders.filter((r) => r.pickup_point_id === p.id),
+  }));
+  const orphans = riders.filter(
+    (r) => !state.points.some((p) => p.id === r.pickup_point_id)
+  );
+  if (orphans.length) buckets.push({ point: { name: "من غير محطة", seq: "—" }, people: orphans });
+
+  const strip = el("section", { class: "strip" },
+    el("h3", { class: "strip__title", text: "خط السير" })
+  );
+
+  buckets.forEach(({ point, people }) => {
+    const onboard = people.filter((p) => statusOf(p.id) === "in").length;
+    strip.append(
+      el("div", { class: `stop ${onboard === 0 ? "is-empty" : ""}` },
+        el("div", { class: "stop__marker" }, String(point.seq ?? "—")),
+        el("div", { class: "stop__body" },
+          el("div", { class: "stop__head" },
+            el("h4", { class: "stop__name", text: point.name }),
+            el("span", { class: "stop__count", text: `${onboard}/${people.length}` })
+          ),
+          people.length
+            ? el("ul", { class: "chips" },
+                ...people.map((p) => {
+                  const st = statusOf(p.id);
+                  const r = rowOf(p.id);
+                  return el("li", {
+                    class: `chip chip--${st} ${p.id === state.profile.id ? "is-me" : ""}`,
+                    title: r?.note || "",
+                  },
+                    el("span", { class: "chip__name", text: p.full_name || "بدون اسم" }),
+                    r?.note ? el("span", { class: "chip__note", text: r.note }) : null
+                  );
+                })
+              )
+            : el("p", { class: "hint", text: "مفيش حد على المحطة دي" })
+        )
+      )
+    );
+  });
+
+  if (canDrive()) {
+    const out = riders.filter((r) => statusOf(r.id) === "out");
+    strip.append(
+      el("div", { class: "card card--sum" },
+        el("h3", { class: "card__title", text: "مش معانا النهاردة" }),
+        out.length
+          ? el("ul", { class: "chips" }, ...out.map((p) =>
+              el("li", { class: "chip chip--out" }, p.full_name)))
+          : el("p", { class: "hint", text: "الكل معانا." })
+      )
+    );
+  }
+
+  return strip;
+}
+return {render, destroy};
+})();
+
+/* ===== track.js ===== */
+const __mod_track = (function () {
+const {sb, state, el, clear, toast, errText, CONFIG, canDrive,
+  agoText, secondsSince, distanceM, prettyDistance, memberName,} = __mod_core;
+const {createMap} = __mod_map;
+let mapApi = null;
+let channel = null;
+let pollTimer = null;
+let tickTimer = null;
+let myWatchId = null;
+let myPos = null;
+let busLoc = null;
+
+// حالة مشاركة السواق
+const share = { on: false, watchId: null, wakeLock: null, lastPush: 0, last: null };
+
+async function render(root) {
+  clear(root);
+  const status = el("div", { class: "track__status" });
+  const mapBox = el("div", { class: "map", id: "map" });
+  const actions = el("div", { class: "track__actions" });
+
+  root.append(el("div", { class: "view view--map" }, status, mapBox, actions));
+
+  mapApi = createMap(mapBox);
+
+  actions.append(
+    el("button", { class: "btn btn--ghost btn--sm", type: "button", text: "الكل في الشاشة", onclick: () => mapApi.fitAll() }),
+    el("button", { class: "btn btn--ghost btn--sm", type: "button", text: "الحق الباص", onclick: () => mapApi.recenterOnBus() })
+  );
+
+  if (canDrive()) actions.prepend(driverToggle(status));
+
+  watchMe();
+  await pullBus();
+  paintStatus(status);
+
+  channel = sb.channel("bus")
+    .on("postgres_changes", { event: "*", schema: "public", table: "driver_locations" }, (payload) => {
+      const row = payload.new;
+      if (row && row.is_sharing) {
+        busLoc = row;
+        mapApi.setBus(busLoc);
+        paintStatus(status);
+      }
+    })
+    .subscribe();
+
+  pollTimer = setInterval(async () => { await pullBus(); paintStatus(status); }, 15000);
+  tickTimer = setInterval(() => paintStatus(status), 5000);
+}
+
+function destroy() {
+  if (channel) { sb.removeChannel(channel); channel = null; }
+  clearInterval(pollTimer); clearInterval(tickTimer);
+  if (myWatchId !== null) { navigator.geolocation.clearWatch(myWatchId); myWatchId = null; }
+  if (mapApi) { mapApi.destroy(); mapApi = null; }
+  // ملاحظة: مشاركة السواق بتفضل شغالة عن قصد لو خرج من الشاشة
+}
+
+async function pullBus() {
+  const { data, error } = await sb
+    .from("driver_locations")
+    .select("*")
+    .eq("is_sharing", true)
+    .order("updated_at", { ascending: false })
+    .limit(1);
+  if (error) return;
+  busLoc = data && data[0] ? data[0] : null;
+  if (mapApi) mapApi.setBus(busLoc);
+}
+
+function watchMe() {
+  if (!navigator.geolocation) return;
+  myWatchId = navigator.geolocation.watchPosition(
+    (pos) => {
+      myPos = [pos.coords.latitude, pos.coords.longitude];
+      if (mapApi) mapApi.setMe(myPos);
+    },
+    () => {},
+    { enableHighAccuracy: false, maximumAge: 30000, timeout: 20000 }
+  );
+}
+
+function paintStatus(box) {
+  clear(box);
+  if (!busLoc) {
+    box.append(
+      el("div", { class: "pill pill--off" }, "الباص مش بيشارك مكانه دلوقتي")
+    );
+    return;
+  }
+  const stale = secondsSince(busLoc.updated_at) > CONFIG.staleAfterSec;
+  const dist = myPos ? distanceM(myPos, [busLoc.lat, busLoc.lng]) : null;
+  box.append(
+    el("div", { class: `pill ${stale ? "pill--stale" : "pill--live"}` },
+      el("span", { class: "pill__dot" }),
+      el("span", { text: stale ? `آخر تحديث ${agoText(busLoc.updated_at)}` : "بيتحرك دلوقتي" })
+    ),
+    el("div", { class: "track__meta" },
+      el("span", { text: `السواق: ${memberName(busLoc.driver_id)}` }),
+      dist !== null ? el("span", { class: "mono", text: `على بعد ${prettyDistance(dist)}` }) : null
+    )
+  );
+}
+
+// ============ مشاركة مكان السواق ============
+
+function driverToggle(statusBox) {
+  const btn = el("button", { class: "btn btn--primary btn--sm", type: "button" });
+  const sync = () => {
+    btn.textContent = share.on ? "وقّف المشاركة" : "ابدأ شارك مكانك";
+    btn.classList.toggle("btn--danger", share.on);
+    btn.classList.toggle("btn--primary", !share.on);
+  };
+  btn.addEventListener("click", async () => {
+    if (share.on) await stopShare(); else await startShare(statusBox);
+    sync();
+  });
+  sync();
+  return btn;
+}
+
+async function startShare(statusBox) {
+  if (!navigator.geolocation) return toast("المتصفح ده مش بيدعم تحديد المكان.", "bad");
+
+  share.watchId = navigator.geolocation.watchPosition(
+    async (pos) => {
+      share.last = pos;
+      const now = Date.now();
+      if (now - share.lastPush < CONFIG.locationPushMs) return;
+      share.lastPush = now;
+      await push(pos);
+    },
+    (err) => {
+      const m = err.code === 1
+        ? "لازم تسمح للموقع بتحديد مكانك من إعدادات المتصفح."
+        : "مش قادر يجيب مكانك دلوقتي.";
+      toast(m, "bad");
+      stopShare();
+    },
+    { enableHighAccuracy: true, maximumAge: 5000, timeout: 20000 }
+  );
+
+  share.on = true;
+  await requestWakeLock();
+  document.addEventListener("visibilitychange", onVisible);
+  toast("بتشارك مكانك. سيب الشاشة مفتوحة والتليفون على الشاحن.", "ok");
+  paintStatus(statusBox);
+}
+
+async function push(pos) {
+  const { error } = await sb.from("driver_locations").upsert({
+    driver_id: state.profile.id,
+    lat: pos.coords.latitude,
+    lng: pos.coords.longitude,
+    accuracy: pos.coords.accuracy,
+    speed: pos.coords.speed,
+    heading: pos.coords.heading,
+    is_sharing: true,
+    updated_at: new Date().toISOString(),
+  }, { onConflict: "driver_id" });
+  if (error) console.warn("location push failed:", error.message);
+}
+
+async function stopShare() {
+  if (share.watchId !== null) navigator.geolocation.clearWatch(share.watchId);
+  share.watchId = null;
+  share.on = false;
+  document.removeEventListener("visibilitychange", onVisible);
+  releaseWakeLock();
+  await sb.from("driver_locations")
+    .update({ is_sharing: false, updated_at: new Date().toISOString() })
+    .eq("driver_id", state.profile.id);
+  toast("وقفت المشاركة.", "ok");
+}
+
+async function requestWakeLock() {
+  try {
+    if ("wakeLock" in navigator) share.wakeLock = await navigator.wakeLock.request("screen");
+  } catch { /* الشاشة هتنام عادي */ }
+}
+
+function releaseWakeLock() {
+  try { share.wakeLock?.release(); } catch {}
+  share.wakeLock = null;
+}
+
+function onVisible() {
+  if (document.visibilityState === "visible" && share.on) requestWakeLock();
+}
+
+const sharing = share;
+return {render, destroy, sharing};
+})();
+
+/* ===== money.js ===== */
+const __mod_money = (function () {
+const {sb, state, el, clear, toast, errText, isAdmin, shortDate, todayISO,} = __mod_core;
+let periods = [];
+let payments = [];
+
+async function render(root) {
+  clear(root);
+  const shell = el("div", { class: "view" });
+  root.append(shell);
+  await load();
+  paint(shell);
+}
+
+function destroy() {}
+
+async function load() {
+  const [pe, pm] = await Promise.all([
+    sb.from("payment_periods").select("*").order("start_date", { ascending: false }).limit(20),
+    sb.from("payments").select("*"),
+  ]);
+  if (pe.error) throw pe.error;
+  periods = pe.data || [];
+  payments = pm.data || [];
+}
+
+function payRow(periodId, userId) {
+  return payments.find((p) => p.period_id === periodId && p.user_id === userId);
+}
+
+function paint(shell) {
+  clear(shell);
+  shell.append(el("header", { class: "head" },
+    el("div", {},
+      el("p", { class: "head__eyebrow", text: "الفلوس" }),
+      el("h2", { class: "head__title", text: isAdmin() ? "التحصيل" : "اللي عليّا" })
+    )
+  ));
+
+  if (isAdmin()) shell.append(newPeriodCard(shell));
+
+  if (!periods.length) {
+    shell.append(el("p", { class: "empty", text: isAdmin() ? "مفيش فترات لسه. اعمل واحدة فوق." : "مفيش فلوس مطلوبة دلوقتي." }));
+    return;
+  }
+
+  if (!isAdmin()) {
+    const mine = periods.map((p) => ({ p, row: payRow(p.id, state.profile.id) }));
+    const due = mine.filter((x) => !x.row?.paid)
+      .reduce((s, x) => s + Number(x.p.amount || 0), 0);
+    shell.append(el("section", { class: "card card--total" },
+      el("p", { class: "card__label", text: "المتأخر عليك" }),
+      el("p", { class: "total mono", text: `${due.toFixed(0)} ج` })
+    ));
+    mine.forEach(({ p, row }) => {
+      const paid = !!row?.paid;
+      shell.append(el("section", { class: `card card--pay ${paid ? "is-paid" : ""}` },
+        el("div", {},
+          el("h3", { class: "card__title", text: p.label }),
+          el("p", { class: "hint mono", text: `${shortDate(p.start_date)} — ${shortDate(p.end_date)}` })
+        ),
+        el("div", { class: "pay__right" },
+          el("span", { class: "mono amount", text: `${Number(p.amount).toFixed(0)} ج` }),
+          el("span", { class: `badge ${paid ? "badge--ok" : "badge--due"}`, text: paid ? "مدفوع" : "متأخر" })
+        )
+      ));
+    });
+    return;
+  }
+
+  // شاشة الأدمن: فترة فترة، وجوه كل فترة كل الركاب
+  const riders = state.members.filter((m) => m.is_active && m.role !== "driver");
+  periods.forEach((p) => {
+    const paidCount = riders.filter((r) => payRow(p.id, r.id)?.paid).length;
+    const collected = paidCount * Number(p.amount || 0);
+    const target = riders.length * Number(p.amount || 0);
+
+    const list = el("ul", { class: "paylist" });
+    riders.forEach((r) => {
+      const paid = !!payRow(p.id, r.id)?.paid;
+      list.append(el("li", { class: `payitem ${paid ? "is-paid" : ""}` },
+        el("label", { class: "check" },
+          el("input", {
+            type: "checkbox", checked: paid,
+            onchange: (e) => togglePaid(shell, p.id, r.id, e.target.checked),
+          }),
+          el("span", { class: "check__box", "aria-hidden": "true" }),
+          el("span", { class: "check__name", text: r.full_name || "بدون اسم" })
+        )
+      ));
+    });
+
+    shell.append(el("section", { class: "card" },
+      el("div", { class: "card__head" },
+        el("div", {},
+          el("h3", { class: "card__title", text: p.label }),
+          el("p", { class: "hint mono", text: `${shortDate(p.start_date)} — ${shortDate(p.end_date)} · ${Number(p.amount).toFixed(0)} ج للفرد` })
+        ),
+        el("span", { class: "mono tally", text: `${collected.toFixed(0)} / ${target.toFixed(0)} ج` })
+      ),
+      list,
+      el("button", {
+        class: "btn btn--ghost btn--sm", type: "button", text: "امسح الفترة دي",
+        onclick: () => removePeriod(shell, p),
+      })
+    ));
+  });
+}
+
+function newPeriodCard(shell) {
+  const label = el("input", { class: "input input--sm", type: "text", placeholder: "اسم الفترة (مثلاً أسبوع ٣ أغسطس)" });
+  const start = el("input", { class: "input input--sm mono", type: "date", value: todayISO() });
+  const end = el("input", { class: "input input--sm mono", type: "date", value: todayISO() });
+  const amount = el("input", { class: "input input--sm mono", type: "number", min: "0", step: "5", placeholder: "المبلغ للفرد" });
+
+  return el("section", { class: "card" },
+    el("h3", { class: "card__title", text: "فترة جديدة" }),
+    el("div", { class: "grid2" }, start, end),
+    label, amount,
+    el("button", {
+      class: "btn btn--primary btn--block btn--sm", type: "button", text: "اعمل الفترة",
+      onclick: async () => {
+        if (!label.value.trim()) return toast("اكتب اسم للفترة.", "bad");
+        const { error } = await sb.from("payment_periods").insert({
+          label: label.value.trim(),
+          start_date: start.value,
+          end_date: end.value,
+          amount: Number(amount.value || 0),
+        });
+        if (error) return toast(errText(error), "bad");
+        toast("الفترة اتعملت.", "ok");
+        await load(); paint(shell);
+      },
+    })
+  );
+}
+
+async function togglePaid(shell, periodId, userId, paid) {
+  const { error } = await sb.from("payments").upsert({
+    period_id: periodId,
+    user_id: userId,
+    paid,
+    paid_at: paid ? new Date().toISOString() : null,
+  }, { onConflict: "period_id,user_id" });
+  if (error) { toast(errText(error), "bad"); return; }
+  await load(); paint(shell);
+}
+
+async function removePeriod(shell, p) {
+  if (!confirm(`تمسح "${p.label}" وكل الدفعات اللي فيها؟`)) return;
+  const { error } = await sb.from("payment_periods").delete().eq("id", p.id);
+  if (error) return toast(errText(error), "bad");
+  toast("اتمسحت.", "ok");
+  await load(); paint(shell);
+}
+return {render, destroy};
+})();
+
+/* ===== manage.js ===== */
+const __mod_manage = (function () {
+const {sb, state, el, clear, toast, errText, loadMembers, loadPoints,} = __mod_core;
+const ROLES = [
+  ["passenger", "راكب"],
+  ["driver", "سواق"],
+  ["admin", "أدمن"],
+];
+
+async function render(root) {
+  clear(root);
+  const shell = el("div", { class: "view" });
+  root.append(shell);
+  paint(shell);
+}
+
+function destroy() {}
+
+async function reload(shell) {
+  await Promise.all([loadMembers(), loadPoints()]);
+  paint(shell);
+}
+
+function paint(shell) {
+  clear(shell);
+  shell.append(el("header", { class: "head" },
+    el("div", {},
+      el("p", { class: "head__eyebrow", text: "الإدارة" }),
+      el("h2", { class: "head__title", text: "المجموعة" })
+    ),
+    el("div", { class: "count" },
+      el("span", { class: "count__num", text: String(state.members.filter((m) => m.is_active).length) }),
+      el("span", { class: "count__of", text: "نشط" })
+    )
+  ));
+
+  shell.append(membersCard(shell));
+  shell.append(pointsCard(shell));
+}
+
+function membersCard(shell) {
+  const list = el("div", { class: "rows" });
+
+  state.members.forEach((m) => {
+    const roleSel = el("select", { class: "select", "aria-label": "الدور" },
+      ...ROLES.map(([v, t]) => el("option", { value: v, selected: m.role === v }, t))
+    );
+    roleSel.addEventListener("change", () => update(shell, m.id, { role: roleSel.value }));
+
+    const pointSel = el("select", { class: "select", "aria-label": "المحطة" },
+      el("option", { value: "", selected: !m.pickup_point_id }, "— محطة —"),
+      ...state.points.map((p) => el("option", { value: String(p.id), selected: m.pickup_point_id === p.id }, p.name))
+    );
+    pointSel.addEventListener("change", () =>
+      update(shell, m.id, { pickup_point_id: pointSel.value ? Number(pointSel.value) : null })
+    );
+
+    const activeBtn = el("button", {
+      class: `pillbtn ${m.is_active ? "is-on" : ""}`, type: "button",
+      text: m.is_active ? "نشط" : "موقوف",
+      onclick: () => update(shell, m.id, { is_active: !m.is_active }),
+    });
+
+    list.append(el("div", { class: "row" },
+      el("div", { class: "row__main" },
+        el("p", { class: "row__name", text: m.full_name || "بدون اسم" }),
+        el("p", { class: "row__sub mono", text: m.phone || "" })
+      ),
+      el("div", { class: "row__controls" }, roleSel, pointSel, activeBtn)
+    ));
+  });
+
+  return el("section", { class: "card" },
+    el("h3", { class: "card__title", text: "الأعضاء" }),
+    el("p", { class: "hint", text: "أي حد بيعمل حساب بيظهر هنا كراكب. حدّد السواق والمحطات من هنا." }),
+    list
+  );
+}
+
+function pointsCard(shell) {
+  const list = el("div", { class: "rows" });
+
+  state.points.forEach((p) => {
+    const name = el("input", { class: "input input--sm", type: "text", value: p.name });
+    const seq = el("input", { class: "input input--sm mono", type: "number", value: String(p.seq ?? 0), min: "0", "aria-label": "الترتيب" });
+    const coords = el("p", { class: "row__sub mono", text: p.lat ? `${p.lat.toFixed(5)}, ${p.lng.toFixed(5)}` : "مفيش إحداثيات" });
+
+    list.append(el("div", { class: "row row--stack" },
+      el("div", { class: "grid-seq" }, seq, name),
+      coords,
+      el("div", { class: "row__controls" },
+        el("button", {
+          class: "btn btn--ghost btn--sm", type: "button", text: "احفظ",
+          onclick: () => savePoint(shell, p.id, { name: name.value.trim(), seq: Number(seq.value || 0) }),
+        }),
+        el("button", {
+          class: "btn btn--ghost btn--sm", type: "button", text: "خد مكاني دلوقتي",
+          onclick: (e) => grabHere(shell, p.id, e.target),
+        }),
+        el("button", {
+          class: "btn btn--ghost btn--sm btn--danger", type: "button", text: "امسح",
+          onclick: () => removePoint(shell, p),
+        })
+      )
+    ));
+  });
+
+  const newName = el("input", { class: "input input--sm", type: "text", placeholder: "اسم محطة جديدة" });
+
+  return el("section", { class: "card" },
+    el("h3", { class: "card__title", text: "المحطات" }),
+    el("p", { class: "hint", text: "الترتيب هو ترتيب المحطة على خط السير. قف على المحطة واضغط «خد مكاني دلوقتي» عشان تتظبط على الخريطة." }),
+    list,
+    el("div", { class: "note-row" },
+      newName,
+      el("button", {
+        class: "btn btn--primary btn--sm", type: "button", text: "زوّد",
+        onclick: async () => {
+          if (!newName.value.trim()) return toast("اكتب اسم المحطة.", "bad");
+          const seq = (state.points.at(-1)?.seq || 0) + 1;
+          const { error } = await sb.from("pickup_points").insert({ name: newName.value.trim(), seq });
+          if (error) return toast(errText(error), "bad");
+          newName.value = "";
+          await reload(shell);
+        },
+      })
+    )
+  );
+}
+
+async function update(shell, id, patch) {
+  const { error } = await sb.from("profiles").update(patch).eq("id", id);
+  if (error) return toast(errText(error), "bad");
+  toast("اتحفظ.", "ok");
+  await reload(shell);
+}
+
+async function savePoint(shell, id, patch) {
+  const { error } = await sb.from("pickup_points").update(patch).eq("id", id);
+  if (error) return toast(errText(error), "bad");
+  toast("اتحفظ.", "ok");
+  await reload(shell);
+}
+
+function grabHere(shell, id, btn) {
+  if (!navigator.geolocation) return toast("المتصفح مش بيدعم تحديد المكان.", "bad");
+  btn.disabled = true;
+  btn.textContent = "بيجيب…";
+  navigator.geolocation.getCurrentPosition(
+    async (pos) => {
+      const { error } = await sb.from("pickup_points")
+        .update({ lat: pos.coords.latitude, lng: pos.coords.longitude })
+        .eq("id", id);
+      if (error) toast(errText(error), "bad");
+      else toast("المحطة اتظبطت على مكانك.", "ok");
+      await reload(shell);
+    },
+    () => { toast("مش قادر يجيب مكانك.", "bad"); btn.disabled = false; btn.textContent = "خد مكاني دلوقتي"; },
+    { enableHighAccuracy: true, timeout: 15000 }
+  );
+}
+
+async function removePoint(shell, p) {
+  if (!confirm(`تمسح محطة "${p.name}"؟`)) return;
+  const { error } = await sb.from("pickup_points").delete().eq("id", p.id);
+  if (error) return toast(errText(error), "bad");
+  await reload(shell);
+}
+return {render, destroy};
+})();
+
+/* ===== me.js ===== */
+const __mod_me = (function () {
+const {sb, state, el, clear, toast, errText, loadProfile, loadMembers, pointName, isAdmin,} = __mod_core;
+const {shareLink} = __mod_config;
+const ROLE_AR = { passenger: "راكب", driver: "سواق", admin: "أدمن" };
+
+async function render(root) {
+  clear(root);
+  const shell = el("div", { class: "view" });
+  root.append(shell);
+  paint(shell);
+}
+
+function destroy() {}
+
+function paint(shell) {
+  clear(shell);
+  const me = state.profile;
+
+  const name = el("input", { class: "input", type: "text", value: me.full_name || "", maxlength: "40" });
+  const phone = el("input", { class: "input mono", type: "tel", dir: "ltr", value: me.phone || "", maxlength: "20", placeholder: "01xxxxxxxxx" });
+  const point = el("select", { class: "select select--block" },
+    el("option", { value: "", selected: !me.pickup_point_id }, "— اختار محطتك —"),
+    ...state.points.map((p) => el("option", { value: String(p.id), selected: me.pickup_point_id === p.id }, p.name))
+  );
+
+  shell.append(
+    el("header", { class: "head" },
+      el("div", {},
+        el("p", { class: "head__eyebrow", text: ROLE_AR[me.role] || me.role }),
+        el("h2", { class: "head__title", text: me.full_name || "حسابي" })
+      )
+    ),
+    el("section", { class: "card" },
+      el("h3", { class: "card__title", text: "بياناتي" }),
+      el("label", { class: "field" }, el("span", { class: "field__label", text: "الاسم" }), name),
+      el("label", { class: "field" }, el("span", { class: "field__label", text: "الموبايل" }), phone),
+      el("label", { class: "field" }, el("span", { class: "field__label", text: "محطتي" }), point),
+      el("p", { class: "hint", text: `دلوقتي: ${pointName(me.pickup_point_id)}` }),
+      el("button", {
+        class: "btn btn--primary btn--block btn--sm", type: "button", text: "احفظ",
+        onclick: async () => {
+          const patch = {
+            full_name: name.value.trim(),
+            phone: phone.value.trim() || null,
+            pickup_point_id: point.value ? Number(point.value) : null,
+          };
+          if (!patch.full_name) return toast("الاسم ماينفعش يفضل فاضي.", "bad");
+          const { error } = await sb.from("profiles").update(patch).eq("id", me.id);
+          if (error) return toast(errText(error), "bad");
+          await loadProfile();
+          await loadMembers();
+          toast("اتحفظ.", "ok");
+          paint(shell);
+        },
+      })
+    ),
+    el("section", { class: "card" },
+      el("h3", { class: "card__title", text: "خلي التطبيق على الشاشة" }),
+      el("p", { class: "hint", text: "من قايمة المتصفح اختار «إضافة إلى الشاشة الرئيسية» عشان يفتح زي أي تطبيق من غير ما تكتب اللينك كل مرة." })
+    ),
+    isAdmin() ? inviteCard() : null,
+    el("button", {
+      class: "btn btn--ghost btn--block", type: "button", text: "خروج",
+      onclick: async () => { await sb.auth.signOut(); },
+    })
+  );
+}
+
+// كارت الأدمن: لينك واحد يبعته للجروب، وأي حد يفتحه يتظبط لوحده
+function inviteCard() {
+  const link = shareLink();
+  if (!link) return null;
+
+  const box = el("input", { class: "input input--sm mono", dir: "ltr", readonly: true, value: link });
+  box.addEventListener("focus", () => box.select());
+
+  return el("section", { class: "card" },
+    el("h3", { class: "card__title", text: "لينك الجروب" }),
+    el("p", { class: "hint", text: "ابعت اللينك ده للناس بدل اللينك العادي. أي حد يفتحه هيتربط بالتطبيق أوتوماتيك من غير ما يكتب أي إعدادات." }),
+    box,
+    el("button", {
+      class: "btn btn--primary btn--block btn--sm", type: "button", text: "انسخ اللينك",
+      onclick: async () => {
+        try {
+          await navigator.clipboard.writeText(link);
+          toast("اتنسخ. ابعته للجروب.", "ok");
+        } catch {
+          box.select();
+          toast("اضغط مطوّل على اللينك وانسخه.", "bad");
+        }
+      },
+    }),
+    el("p", { class: "hint", text: "اللينك ده فيه مفتاح الاتصال — ابعته للجروب بس، مش في أي مكان عام." })
+  );
+}
+return {render, destroy};
+})();
+
+/* ===== app.js ===== */
+const __mod_app = (function () {
+const {sb, state, el, clear, errText, CONFIG,
+  loadProfile, loadMembers, loadPoints, isAdmin,} = __mod_core;
+const {renderAuth} = __mod_auth;
+const {renderSetup} = __mod_setup;
+const {isConfigured} = __mod_config;
+const today = __mod_today;
+const track = __mod_track;
+const money = __mod_money;
+const manage = __mod_manage;
+const me = __mod_me;
+const app = document.getElementById("app");
+const ROUTES = { today, map: track, money, manage, me };
+let current = null;
+
+const NAV = [
+  { key: "today", label: "النهاردة", icon: "M4 5h16v11H4zM7 19v-2M17 19v-2M7 8h10" },
+  { key: "map", label: "الخريطة", icon: "M12 21s7-6.5 7-11a7 7 0 10-14 0c0 4.5 7 11 7 11z M12 10a1 1 0 100-2 1 1 0 000 2z" },
+  { key: "money", label: "الفلوس", icon: "M4 7h16v10H4z M12 14a2 2 0 100-4 2 2 0 000 4z" },
+  { key: "manage", label: "الإدارة", icon: "M4 6h16M4 12h16M4 18h10", admin: true },
+  { key: "me", label: "حسابي", icon: "M12 12a4 4 0 100-8 4 4 0 000 8z M5 20a7 7 0 0114 0" },
+];
+
+// ---------- إقلاع ----------
+boot();
+
+async function boot() {
+  if (!isConfigured()) {
+    renderSetup(app);
+    return;
+  }
+
+  const { data } = await sb.auth.getSession();
+  state.session = data.session;
+
+  sb.auth.onAuthStateChange(async (event, session) => {
+    if (event === "INITIAL_SESSION") return; // بنتعامل معاها تحت
+    const wasIn = !!state.session;
+    state.session = session;
+    if (!session) {
+      teardown();
+      state.profile = null;
+      renderAuth(app);
+      return;
+    }
+    if (!wasIn || event === "SIGNED_IN") await start();
+  });
+
+  if (state.session) await start();
+  else renderAuth(app);
+}
+
+async function start() {
+  clear(app);
+  app.append(el("div", { class: "boot" }, el("span", { class: "boot__dot" }), "ثانية واحدة…"));
+  try {
+    let profile = await loadProfile();
+    // البروفايل بيتعمل بـ trigger، ساعات بيتأخر شوية بعد أول تسجيل
+    for (let i = 0; i < 5 && !profile; i++) {
+      await new Promise((r) => setTimeout(r, 600));
+      profile = await loadProfile();
+    }
+    if (!profile) {
+      clear(app);
+      app.append(el("div", { class: "view" },
+        el("p", { class: "empty", text: "الحساب اتعمل بس البروفايل مش موجود. تأكد إنك شغّلت schema.sql على Supabase." }),
+        el("button", { class: "btn btn--ghost btn--block", text: "خروج", onclick: () => sb.auth.signOut() })
+      ));
+      return;
+    }
+    await Promise.all([loadMembers(), loadPoints()]);
+    renderShell();
+    window.addEventListener("hashchange", route);
+    route();
+  } catch (e) {
+    clear(app);
+    app.append(el("div", { class: "view" },
+      el("p", { class: "empty", text: errText(e) }),
+      el("button", { class: "btn btn--ghost btn--block", text: "خروج", onclick: () => sb.auth.signOut() })
+    ));
+  }
+}
+
+function teardown() {
+  if (current?.destroy) { try { current.destroy(); } catch {} }
+  current = null;
+  window.removeEventListener("hashchange", route);
+}
+
+function renderShell() {
+  clear(app);
+  app.append(
+    el("main", { class: "screen", id: "screen" }),
+    nav()
+  );
+}
+
+function nav() {
+  const bar = el("nav", { class: "nav", "aria-label": "التنقل" });
+  NAV.filter((n) => !n.admin || isAdmin()).forEach((n) => {
+    const a = el("a", {
+      class: "nav__item", href: `#/${n.key}`, dataset: { key: n.key },
+    },
+      el("span", {
+        class: "nav__icon",
+        html: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="${n.icon}"/></svg>`,
+      }),
+      el("span", { class: "nav__label", text: n.label })
+    );
+    bar.append(a);
+  });
+  return bar;
+}
+
+function markNav(key) {
+  document.querySelectorAll(".nav__item").forEach((a) => {
+    const on = a.dataset.key === key;
+    a.classList.toggle("is-on", on);
+    if (on) a.setAttribute("aria-current", "page");
+    else a.removeAttribute("aria-current");
+  });
+}
+
+async function route() {
+  let key = (location.hash.replace("#/", "") || "today").trim();
+  if (!ROUTES[key]) key = "today";
+  if (key === "manage" && !isAdmin()) key = "today";
+
+  if (current?.destroy) { try { current.destroy(); } catch {} }
+  current = ROUTES[key];
+  markNav(key);
+
+  const screen = document.getElementById("screen");
+  if (!screen) return;
+  clear(screen);
+  screen.append(el("div", { class: "boot" }, el("span", { class: "boot__dot" })));
+  try {
+    await current.render(screen);
+  } catch (e) {
+    clear(screen);
+    screen.append(el("p", { class: "empty", text: errText(e) }));
+  }
+  screen.scrollTop = 0;
+}
+
+// تحذير للسواق لو قفل التطبيق وهو بيشارك مكانه
+window.addEventListener("beforeunload", (e) => {
+  if (track.sharing?.on) {
+    e.preventDefault();
+    e.returnValue = "";
+  }
+});
+
+document.title = CONFIG.appName;
+
+})();
+
+</script>
+</body>
+</html>
