@@ -422,6 +422,28 @@ body { background-image: radial-gradient(120% 60% at 50% 0%, #1b2233 0%, var(--i
   *, *::before, *::after { animation-duration: .001ms !important; transition-duration: .001ms !important; }
 }
 
+/* ---------- مبدّل اللغة ---------- */
+
+.lang {
+  display: flex; gap: 4px; align-self: flex-start;
+  background: var(--surface); border: 1px solid var(--line);
+  border-radius: 999px; padding: 3px;
+}
+.lang__btn {
+  appearance: none; cursor: pointer; border: 0; background: transparent;
+  color: var(--dim); font-family: var(--sans); font-size: .8rem; font-weight: 500;
+  padding: 6px 14px; border-radius: 999px;
+  transition: background .15s ease, color .15s ease;
+}
+.lang__btn.is-on { background: var(--surface-2); color: var(--amber); }
+.lang__btn:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
+.auth .lang { margin-bottom: 22px; }
+
+/* اللاتيني في عناوين العرض محتاج تتبّع أوسع شوية */
+html[lang="en"] .head__title,
+html[lang="en"] .auth__title,
+html[lang="en"] .strip__title { letter-spacing: -.015em; }
+
 </style>
 </head>
 <body>
@@ -432,6 +454,309 @@ body { background-image: radial-gradient(120% 60% at 50% 0%, #1b2233 0%, var(--i
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
   <script type="module">
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm";
+
+/* ===== i18n.js ===== */
+const __mod_i18n = (function () {
+
+// ============================================================
+//  اللغة — عربي / English
+//  التبديل بيعيد تحميل الصفحة عشان الاتجاه (RTL/LTR) يتظبط صح.
+// ============================================================
+
+const KEY = "bus.lang";
+
+function detect() {
+  const saved = localStorage.getItem(KEY);
+  if (saved === "ar" || saved === "en") return saved;
+  return (navigator.language || "").toLowerCase().startsWith("ar") ? "ar" : "en";
+}
+
+const LANG = detect();
+const isRTL = LANG === "ar";
+const locale = LANG === "ar" ? "ar-EG" : "en-GB";
+
+document.documentElement.lang = LANG;
+document.documentElement.dir = isRTL ? "rtl" : "ltr";
+
+function setLang(next) {
+  localStorage.setItem(KEY, next);
+  location.reload();
+}
+
+// جمع عربي: واحد / اتنين / من ٣ لـ ١٠ / أكتر من كده
+function arCount(n, one, two, few, many) {
+  if (n === 1) return one;
+  if (n === 2) return two;
+  if (n >= 3 && n <= 10) return `${n} ${few}`;
+  return `${n} ${many}`;
+}
+
+const DICT = {
+  ar: {
+    appName: "الباص",
+    tagline: "مين معانا النهاردة، والباص وصل فين.",
+
+    // عام
+    save: "احفظ", saved: "اتحفظ.", del: "امسح", add: "زوّد", send: "ابعت",
+    moment: "ثانية واحدة…", logout: "خروج", now: "دلوقتي",
+
+    // التنقل
+    navToday: "النهاردة", navMap: "الخريطة", navMoney: "الفلوس",
+    navManage: "الإدارة", navMe: "حسابي",
+
+    // الأدوار
+    rolePassenger: "راكب", roleDriver: "سواق", roleAdmin: "أدمن",
+
+    // الدخول
+    authSub: "خط الشغل بتاعنا، في مكان واحد",
+    fName: "الاسم", fEmail: "الإيميل", fPass: "الباسورد",
+    login: "دخول", signup: "اعمل حساب",
+    noAccount: "معنديش حساب — سجّل", haveAccount: "عندي حساب — دخول",
+    namePlaceholder: "اسمك زي ما الناس بتناديك",
+    needName: "اكتب اسمك عشان السواق يعرفك.",
+    confirmFirst: "الحساب اتعمل. افتح إيميلك وأكّد الحساب وبعدين سجّل دخول.",
+    connSettings: "إعدادات الاتصال",
+
+    // الربط
+    setupTitle: "الاتصال",
+    setupSub: "خطوة واحدة بس، وبعدها مش هتشوف الشاشة دي تاني.",
+    step1a: "افتح ", step1b: " واعمل مشروع جديد — مجاني ومش بيطلب فيزا.",
+    step2a: "من ", step2b: " الصق ملف ", step2c: " واضغط Run.",
+    step3a: "من ", step3b: " اقفل ", step3c: ".",
+    step4a: "من ", step4b: " انسخ الاتنين اللي تحت — المفتاح اللي بيبدأ بـ ", step4c: " مش السري.",
+    projectUrl: "Project URL", publishableKey: "Publishable key",
+    connect: "اربط وابدأ",
+    badUrl: "الرابط شكله مش مظبوط. لازم يبقى زي https://xxxxx.supabase.co",
+    badKey: "المفتاح شكله مش مظبوط. لازم يبدأ بـ sb_publishable_ أو eyJ — من Project Settings ← API Keys.",
+    secretKey: "ده المفتاح السري. استخدم الـ publishable key بدل منه — السري ملوش لازمة هنا وخطر يتحط في المتصفح.",
+    keyNote: "الـ publishable key دي public بطبيعتها، مش سر. اللي بيحمي الداتا هو الـ RLS اللي في schema.sql. متحطش المفتاح السري (sb_secret_) هنا أبداً.",
+    clearConn: "امسح الاتصال المحفوظ",
+    noProfile: "الحساب اتعمل بس البروفايل مش موجود. تأكد إنك شغّلت schema.sql على Supabase.",
+
+    // النهاردة
+    dirGo: "الرايحة", dirBack: "الرجعة",
+    meToday: "أنا النهاردة", withYou: "معاكم", notWithYou: "مش معاكم",
+    noteToDriver: "ملاحظة للسواق (اختياري)",
+    lastEdit: "آخر تعديل ", defaultIn: "من غير ما تعمل حاجة إنت محسوب معانا.",
+    lateWarn: "غيّرت بعد ميعاد التأكيد — ابعت للسواق كمان.",
+    markedIn: "تمام، إنت معانا", markedOut: "تمام، سجّلناك مش معانا",
+    sayToRiders: "قول حاجة للركاب",
+    notePlaceholder: "هتأخر ١٠ دقايق…",
+    noteSent: "وصلت للناس.", writeNoteFirst: "اكتب الملاحظة الأول.",
+    noteExpires: "الملاحظة بتختفي لوحدها بعد ١٢ ساعة.",
+    fromDriver: "من السواق",
+    route: "خط السير", noStop: "من غير محطة",
+    noOneHere: "مفيش حد على المحطة دي",
+    outToday: "مش معانا النهاردة", everyoneIn: "الكل معانا.",
+
+    // الخريطة
+    notSharing: "الباص مش بيشارك مكانه دلوقتي",
+    movingNow: "بيتحرك دلوقتي", lastUpdate: "آخر تحديث ",
+    driverIs: "السواق: ", awayBy: "على بعد ",
+    fitAll: "الكل في الشاشة", followBus: "الحق الباص",
+    startShare: "ابدأ شارك مكانك", stopShare: "وقّف المشاركة",
+    shareOn: "بتشارك مكانك. سيب الشاشة مفتوحة والتليفون على الشاحن.",
+    shareOff: "وقفت المشاركة.",
+    noGeo: "المتصفح ده مش بيدعم تحديد المكان.",
+    permDenied: "لازم تسمح للموقع بتحديد مكانك من إعدادات المتصفح.",
+    cantLocate: "مش قادر يجيب مكانك دلوقتي.",
+    youAreHere: "إنت هنا",
+
+    // الفلوس
+    money: "الفلوس", collection: "التحصيل", whatIOwe: "اللي عليّا",
+    outstanding: "المتأخر عليك", paidBadge: "مدفوع", dueBadge: "متأخر",
+    newPeriod: "فترة جديدة", periodName: "اسم الفترة (مثلاً أسبوع ٣ أغسطس)",
+    amountPerPerson: "المبلغ للفرد", createPeriod: "اعمل الفترة",
+    periodCreated: "الفترة اتعملت.", needLabel: "اكتب اسم للفترة.",
+    deletePeriod: "امسح الفترة دي", deleted: "اتمسحت.",
+    confirmDeletePeriod: "تمسح الفترة دي وكل الدفعات اللي فيها؟",
+    perPerson: " للفرد", noPeriodsAdmin: "مفيش فترات لسه. اعمل واحدة فوق.",
+    noPeriods: "مفيش فلوس مطلوبة دلوقتي.", currency: "ج",
+
+    // الإدارة
+    manage: "الإدارة", group: "المجموعة", activeCount: "نشط",
+    members: "الأعضاء",
+    membersHint: "أي حد بيعمل حساب بيظهر هنا كراكب. حدّد السواق والمحطات من هنا.",
+    stops: "المحطات",
+    stopsHint: "الترتيب هو ترتيب المحطة على خط السير. قف على المحطة واضغط «خد مكاني دلوقتي» عشان تتظبط على الخريطة.",
+    newStopName: "اسم محطة جديدة", needStopName: "اكتب اسم المحطة.",
+    useMyLocation: "خد مكاني دلوقتي", gettingLoc: "بيجيب…",
+    stopPinned: "المحطة اتظبطت على مكانك.", noCoords: "مفيش إحداثيات",
+    confirmDeleteStop: "تمسح محطة", stopped: "موقوف", activeLbl: "نشط",
+    pickStop: "— محطة —", order: "الترتيب",
+
+    // حسابي
+    myInfo: "بياناتي", myStop: "محطتي", pickMyStop: "— اختار محطتك —",
+    phone: "الموبايل", currently: "دلوقتي: ",
+    nameRequired: "الاسم ماينفعش يفضل فاضي.",
+    addToHome: "خلي التطبيق على الشاشة",
+    addToHomeHint: "من قايمة المتصفح اختار «إضافة إلى الشاشة الرئيسية» عشان يفتح زي أي تطبيق من غير ما تكتب اللينك كل مرة.",
+    groupLink: "لينك الجروب",
+    groupLinkHint: "ابعت اللينك ده للناس بدل اللينك العادي. أي حد يفتحه هيتربط بالتطبيق أوتوماتيك من غير ما يكتب أي إعدادات.",
+    copyLink: "انسخ اللينك", linkCopied: "اتنسخ. ابعته للجروب.",
+    copyManually: "اضغط مطوّل على اللينك وانسخه.",
+    linkWarn: "اللينك ده فيه مفتاح الاتصال — ابعته للجروب بس، مش في أي مكان عام.",
+    language: "اللغة",
+
+    // الأخطاء
+    eOffline: "مفيش نت. جرّب تاني.",
+    eCreds: "الإيميل أو الباسورد غلط.",
+    eExists: "الإيميل ده مسجّل قبل كده. سجّل دخول.",
+    eShortPass: "الباسورد لازم يبقى ٦ حروف على الأقل.",
+    eRLS: "مالكش صلاحية على العملية دي.",
+    eGeneric: "حصل خطأ.",
+
+    // الوقت
+    justNow: "دلوقتي",
+    secsAgo: (n) => "من " + arCount(n, "ثانية", "ثانيتين", "ثواني", "ثانية"),
+    minsAgo: (n) => "من " + arCount(n, "دقيقة", "دقيقتين", "دقايق", "دقيقة"),
+    hoursAgo: (n) => "من " + arCount(n, "ساعة", "ساعتين", "ساعات", "ساعة"),
+    daysAgo: (n) => "من " + arCount(n, "يوم", "يومين", "أيام", "يوم"),
+    meters: (n) => `${n} متر`,
+    km: (n) => `${n} كم`,
+    days: ["الأحد","الاتنين","التلات","الأربع","الخميس","الجمعة","السبت"],
+    months: ["يناير","فبراير","مارس","أبريل","مايو","يونيو","يوليو","أغسطس","سبتمبر","أكتوبر","نوفمبر","ديسمبر"],
+  },
+
+  en: {
+    appName: "The Bus",
+    tagline: "Who's riding today, and where the bus is.",
+
+    save: "Save", saved: "Saved.", del: "Delete", add: "Add", send: "Send",
+    moment: "One moment…", logout: "Sign out", now: "now",
+
+    navToday: "Today", navMap: "Map", navMoney: "Money",
+    navManage: "Manage", navMe: "Account",
+
+    rolePassenger: "Rider", roleDriver: "Driver", roleAdmin: "Admin",
+
+    authSub: "Our ride, in one place",
+    fName: "Name", fEmail: "Email", fPass: "Password",
+    login: "Sign in", signup: "Create account",
+    noAccount: "No account — sign up", haveAccount: "I have an account — sign in",
+    namePlaceholder: "The name people call you",
+    needName: "Add your name so the driver knows you.",
+    confirmFirst: "Account created. Confirm it from your email, then sign in.",
+    connSettings: "Connection settings",
+
+    setupTitle: "Connection",
+    setupSub: "One step, and you won't see this screen again.",
+    step1a: "Open ", step1b: " and create a project — free, no card needed.",
+    step2a: "In ", step2b: " paste ", step2c: " and hit Run.",
+    step3a: "In ", step3b: " turn off ", step3c: ".",
+    step4a: "In ", step4b: " copy both values below — the key starting with ", step4c: ", not the secret one.",
+    projectUrl: "Project URL", publishableKey: "Publishable key",
+    connect: "Connect and start",
+    badUrl: "That URL doesn't look right. It should look like https://xxxxx.supabase.co",
+    badKey: "That key doesn't look right. It should start with sb_publishable_ or eyJ — from Project Settings → API Keys.",
+    secretKey: "That's the secret key. Use the publishable key instead — the secret one isn't needed here and isn't safe in a browser.",
+    keyNote: "The publishable key is public by design, not a secret. What protects your data is the RLS in schema.sql. Never put the secret key (sb_secret_) here.",
+    clearConn: "Clear saved connection",
+    noProfile: "Account created but no profile found. Check that schema.sql ran on Supabase.",
+
+    dirGo: "Morning", dirBack: "Evening",
+    meToday: "Me today", withYou: "I'm in", notWithYou: "I'm out",
+    noteToDriver: "Note for the driver (optional)",
+    lastEdit: "Last changed ", defaultIn: "You're counted in unless you say otherwise.",
+    lateWarn: "Changed after the cut-off — message the driver too.",
+    markedIn: "Got it, you're in", markedOut: "Got it, you're out",
+    sayToRiders: "Tell the riders something",
+    notePlaceholder: "Running 10 minutes late…",
+    noteSent: "Sent to everyone.", writeNoteFirst: "Write the note first.",
+    noteExpires: "Notes disappear on their own after 12 hours.",
+    fromDriver: "From the driver",
+    route: "Route", noStop: "No stop set",
+    noOneHere: "Nobody at this stop",
+    outToday: "Out today", everyoneIn: "Everyone's in.",
+
+    notSharing: "The bus isn't sharing its location right now",
+    movingNow: "Moving now", lastUpdate: "Last update ",
+    driverIs: "Driver: ", awayBy: "Away by ",
+    fitAll: "Fit everything", followBus: "Follow the bus",
+    startShare: "Start sharing location", stopShare: "Stop sharing",
+    shareOn: "Sharing your location. Keep the screen on and the phone charging.",
+    shareOff: "Stopped sharing.",
+    noGeo: "This browser can't do location.",
+    permDenied: "Allow location access from your browser settings.",
+    cantLocate: "Can't get your location right now.",
+    youAreHere: "You're here",
+
+    money: "Money", collection: "Collection", whatIOwe: "What I owe",
+    outstanding: "Outstanding", paidBadge: "Paid", dueBadge: "Due",
+    newPeriod: "New period", periodName: "Period name (e.g. week of 3 Aug)",
+    amountPerPerson: "Amount per person", createPeriod: "Create period",
+    periodCreated: "Period created.", needLabel: "Give the period a name.",
+    deletePeriod: "Delete this period", deleted: "Deleted.",
+    confirmDeletePeriod: "Delete this period and every payment in it?",
+    perPerson: " per person", noPeriodsAdmin: "No periods yet. Create one above.",
+    noPeriods: "Nothing owed right now.", currency: "EGP",
+
+    manage: "Manage", group: "The group", activeCount: "active",
+    members: "Members",
+    membersHint: "Anyone who signs up shows up here as a rider. Set the driver and stops from here.",
+    stops: "Stops",
+    stopsHint: "The number is the stop's order along the route. Stand at the stop and tap \"Use my location\" to pin it on the map.",
+    newStopName: "New stop name", needStopName: "Give the stop a name.",
+    useMyLocation: "Use my location", gettingLoc: "Getting…",
+    stopPinned: "Stop pinned to your location.", noCoords: "No coordinates",
+    confirmDeleteStop: "Delete the stop", stopped: "Paused", activeLbl: "Active",
+    pickStop: "— stop —", order: "Order",
+
+    myInfo: "My details", myStop: "My stop", pickMyStop: "— pick your stop —",
+    phone: "Phone", currently: "Currently: ",
+    nameRequired: "Your name can't be empty.",
+    addToHome: "Keep it on your home screen",
+    addToHomeHint: "From the browser menu choose \"Add to Home Screen\" so it opens like an app without typing the link.",
+    groupLink: "Group link",
+    groupLinkHint: "Send this link instead of the plain one. Anyone who opens it gets connected automatically, no setup.",
+    copyLink: "Copy link", linkCopied: "Copied. Send it to the group.",
+    copyManually: "Long-press the link and copy it.",
+    linkWarn: "This link carries the connection key — send it to the group only, not anywhere public.",
+    language: "Language",
+
+    eOffline: "No connection. Try again.",
+    eCreds: "Wrong email or password.",
+    eExists: "That email is already registered. Sign in instead.",
+    eShortPass: "Password needs at least 6 characters.",
+    eRLS: "You don't have permission for that.",
+    eGeneric: "Something went wrong.",
+
+    justNow: "just now",
+    secsAgo: (n) => `${n}s ago`,
+    minsAgo: (n) => `${n} min ago`,
+    hoursAgo: (n) => `${n}h ago`,
+    daysAgo: (n) => `${n}d ago`,
+    meters: (n) => `${n} m`,
+    km: (n) => `${n} km`,
+    days: ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"],
+    months: ["January","February","March","April","May","June","July","August","September","October","November","December"],
+  },
+};
+
+const BANK = DICT[LANG];
+
+function t(key, ...args) {
+  const v = BANK[key];
+  if (v === undefined) return DICT.en[key] ?? key;
+  return typeof v === "function" ? v(...args) : v;
+}
+
+// مبدّل اللغة — عنصر جاهز يتحط في أي شاشة
+function langToggle(el) {
+  const pick = (code, label) =>
+    el("button", {
+      class: `lang__btn ${LANG === code ? "is-on" : ""}`,
+      type: "button", lang: code,
+      "aria-pressed": LANG === code,
+      onclick: () => { if (code !== LANG) setLang(code); },
+    }, label);
+
+  return el("div", { class: "lang", role: "group", "aria-label": t("language") },
+    pick("ar", "عربي"), pick("en", "English")
+  );
+}
+return {setLang, t, langToggle, LANG, isRTL, locale};
+})();
 
 /* ===== config.js ===== */
 const __mod_config = (function () {
@@ -448,8 +773,8 @@ const __mod_config = (function () {
 const KEY = "bus.connection";
 
 const FALLBACK = {
-  url: "",   // مثال: https://xxxxx.supabase.co
-  key: "",   // الـ anon public key
+  url: "https://kaetgedqiyqryqgrgxmo.supabase.co",
+  key: "sb_publishable_XHpbZ_Oq19Do2bl0s81HKw_p1AGzOIh",
 };
 
 function stored() {
@@ -502,7 +827,7 @@ function shareLink() {
 }
 
 const CONFIG = {
-  appName: "الباص",
+  appName: "",  // بييجي من i18n
   locationPushMs: 10000,   // كل كام ملي ثانية نبعت مكان السواق
   staleAfterSec: 60,       // بعد كام ثانية نعتبر المكان قديم
   cutoffHourGo: 22,        // آخر ميعاد للتغيير قبل الرايحة (تنبيه بس)
@@ -515,6 +840,7 @@ return {isConfigured, saveConnection, clearConnection, shareLink, SUPABASE_URL, 
 /* ===== core.js ===== */
 const __mod_core = (function () {
 const {SUPABASE_URL, SUPABASE_ANON_KEY, CONFIG} = __mod_config;
+const {t, isRTL, locale} = __mod_i18n;
 const sb = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   auth: { persistSession: true, autoRefreshToken: true },
 });
@@ -565,12 +891,12 @@ function todayISO(d = new Date()) {
   return t.toISOString().slice(0, 10);
 }
 
-const AR_DAYS = ["الأحد", "الاتنين", "التلات", "الأربع", "الخميس", "الجمعة", "السبت"];
-const AR_MONTHS = ["يناير","فبراير","مارس","أبريل","مايو","يونيو","يوليو","أغسطس","سبتمبر","أكتوبر","نوفمبر","ديسمبر"];
-
 function prettyDate(iso) {
   const d = new Date(iso + "T12:00:00");
-  return `${AR_DAYS[d.getDay()]} ${d.getDate()} ${AR_MONTHS[d.getMonth()]}`;
+  const days = t("days"), months = t("months");
+  return isRTL
+    ? `${days[d.getDay()]} ${d.getDate()} ${months[d.getMonth()]}`
+    : `${days[d.getDay()]} ${d.getDate()} ${months[d.getMonth()]}`;
 }
 
 function shortDate(iso) {
@@ -580,18 +906,18 @@ function shortDate(iso) {
 
 function clockTime(ts) {
   const d = new Date(ts);
-  return d.toLocaleTimeString("ar-EG", { hour: "2-digit", minute: "2-digit" });
+  return d.toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" });
 }
 
 function agoText(ts) {
   const sec = Math.max(0, Math.round((Date.now() - new Date(ts).getTime()) / 1000));
-  if (sec < 10) return "دلوقتي";
-  if (sec < 60) return `من ${sec} ثانية`;
+  if (sec < 10) return t("justNow");
+  if (sec < 60) return t("secsAgo", sec);
   const min = Math.round(sec / 60);
-  if (min < 60) return `من ${min} دقيقة`;
+  if (min < 60) return t("minsAgo", min);
   const hr = Math.round(min / 60);
-  if (hr < 24) return `من ${hr} ساعة`;
-  return `من ${Math.round(hr / 24)} يوم`;
+  if (hr < 24) return t("hoursAgo", hr);
+  return t("daysAgo", Math.round(hr / 24));
 }
 
 function secondsSince(ts) {
@@ -612,7 +938,7 @@ function distanceM(a, b) {
 
 function prettyDistance(m) {
   if (m === null) return "";
-  return m < 1000 ? `${m} متر` : `${(m / 1000).toFixed(1)} كم`;
+  return m < 1000 ? t("meters", m) : t("km", (m / 1000).toFixed(1));
 }
 
 // ---------- التنبيهات ----------
@@ -630,12 +956,12 @@ function toast(msg, kind = "ok") {
 }
 
 function errText(error) {
-  const m = error?.message || String(error || "حصل خطأ");
-  if (/Failed to fetch|NetworkError/i.test(m)) return "مفيش نت. جرّب تاني.";
-  if (/Invalid login credentials/i.test(m)) return "الإيميل أو الباسورد غلط.";
-  if (/already registered/i.test(m)) return "الإيميل ده مسجّل قبل كده. سجّل دخول.";
-  if (/Password should be/i.test(m)) return "الباسورد لازم يبقى ٦ حروف على الأقل.";
-  if (/row-level security/i.test(m)) return "مالكش صلاحية على العملية دي.";
+  const m = error?.message || String(error || t("eGeneric"));
+  if (/Failed to fetch|NetworkError/i.test(m)) return t("eOffline");
+  if (/Invalid login credentials/i.test(m)) return t("eCreds");
+  if (/already registered/i.test(m)) return t("eExists");
+  if (/Password should be/i.test(m)) return t("eShortPass");
+  if (/row-level security/i.test(m)) return t("eRLS");
   return m;
 }
 
@@ -672,12 +998,12 @@ async function loadPoints() {
 }
 
 function pointName(id) {
-  return state.points.find((p) => p.id === id)?.name || "من غير محطة";
+  return state.points.find((p) => p.id === id)?.name || t("noStop");
 }
 
 function memberName(id) {
   const m = state.members.find((x) => x.id === id);
-  return m?.full_name || "حد";
+  return m?.full_name || "—";
 }
 return {el, clear, todayISO, prettyDate, shortDate, clockTime, agoText, secondsSince, distanceM, prettyDistance, toast, errText, loadProfile, loadMembers, loadPoints, pointName, memberName, sb, state, isDriver, isAdmin, canDrive, CONFIG};
 })();
@@ -686,6 +1012,7 @@ return {el, clear, todayISO, prettyDate, shortDate, clockTime, agoText, secondsS
 const __mod_setup = (function () {
 const {el, clear, CONFIG} = __mod_core;
 const {saveConnection, clearConnection} = __mod_config;
+const {t, langToggle} = __mod_i18n;
 function renderSetup(root, { reconfigure = false } = {}) {
   clear(root);
 
@@ -701,23 +1028,39 @@ function renderSetup(root, { reconfigure = false } = {}) {
   });
   const msg = el("p", { class: "auth__msg", role: "alert" });
 
-  const save = el("button", { class: "btn btn--primary btn--block", type: "button", text: "اربط وابدأ" });
+  // بنشيل المسافات وعلامات الاتجاه المخفية اللي بتتلزق مع النسخ في صفحة عربي
+  const scrub = (s) => (s || "").replace(/[\s\u200B-\u200F\u202A-\u202E\u2066-\u2069\uFEFF]/g, "");
+
+  function normalizeUrl(raw) {
+    let s = scrub(raw);
+    if (!s) return "";
+    if (!/^https?:\/\//i.test(s)) s = "https://" + s;
+    try {
+      const parsed = new URL(s);
+      if (!parsed.hostname.includes(".")) return "";
+      return "https://" + parsed.hostname;
+    } catch {
+      return "";
+    }
+  }
+
+  const save = el("button", { class: "btn btn--primary btn--block", type: "button", text: t("connect") });
   save.addEventListener("click", () => {
-    const u = url.value.trim().replace(/\/+$/, "");
-    const k = key.value.trim();
-    if (!/^https:\/\/[\w-]+\.supabase\.(co|in)$/.test(u)) {
-      msg.textContent = "الرابط شكله مش مظبوط. لازم يبقى زي https://xxxxx.supabase.co";
+    const u = normalizeUrl(url.value);
+    const k = scrub(key.value);
+    if (!u) {
+      msg.textContent = t("badUrl");
       return;
     }
     // Supabase ليها نوعين مفاتيح: الجديد sb_publishable_ والقديم JWT
     const isNew = k.startsWith("sb_publishable_");
     const isLegacy = k.startsWith("eyJ") && k.split(".").length === 3;
     if (k.startsWith("sb_secret_") || k.includes("service_role")) {
-      msg.textContent = "ده المفتاح السري. استخدم الـ publishable key بدل منه — السري ملوش لازمة هنا وخطر يتحط في المتصفح.";
+      msg.textContent = t("secretKey");
       return;
     }
     if (!isNew && !isLegacy) {
-      msg.textContent = "المفتاح شكله مش مظبوط. لازم يبدأ بـ sb_publishable_ أو eyJ — من Project Settings ← API Keys.";
+      msg.textContent = t("badKey");
       return;
     }
     saveConnection(u, k);
@@ -726,31 +1069,32 @@ function renderSetup(root, { reconfigure = false } = {}) {
 
   root.append(
     el("div", { class: "auth" },
+      langToggle(el),
       el("div", { class: "auth__mark", "aria-hidden": "true" },
         el("span", { class: "auth__dot" }), el("span", { class: "auth__line" })
       ),
-      el("h1", { class: "auth__title", text: reconfigure ? "الاتصال" : CONFIG.appName }),
-      el("p", { class: "auth__sub", text: "خطوة واحدة بس، وبعدها مش هتشوف الشاشة دي تاني." }),
+      el("h1", { class: "auth__title", text: reconfigure ? t("setupTitle") : t("appName") }),
+      el("p", { class: "auth__sub", text: t("setupSub") }),
 
       el("ol", { class: "steps" },
-        el("li", {}, "افتح ", el("span", { class: "mono", text: "supabase.com" }), " واعمل مشروع جديد — مجاني ومش بيطلب فيزا."),
-        el("li", {}, "من ", el("strong", { text: "SQL Editor" }), " الصق ملف ", el("span", { class: "mono", text: "schema.sql" }), " واضغط Run."),
-        el("li", {}, "من ", el("strong", { text: "Authentication ← Providers ← Email" }), " اقفل ", el("span", { class: "mono", text: "Confirm email" }), "."),
-        el("li", {}, "من ", el("strong", { text: "Project Settings ← API Keys" }), " انسخ الاتنين اللي تحت — المفتاح اللي بيبدأ بـ ", el("span", { class: "mono", text: "sb_publishable_" }), " مش السري.")
+        el("li", {}, t("step1a"), el("span", { class: "mono", text: "supabase.com" }), t("step1b")),
+        el("li", {}, t("step2a"), el("strong", { text: "SQL Editor" }), t("step2b"), el("span", { class: "mono", text: "schema.sql" }), t("step2c")),
+        el("li", {}, t("step3a"), el("strong", { text: "Authentication → Providers → Email" }), t("step3b"), el("span", { class: "mono", text: "Confirm email" }), t("step3c")),
+        el("li", {}, t("step4a"), el("strong", { text: "Project Settings → API Keys" }), t("step4b"), el("span", { class: "mono", text: "sb_publishable_" }), t("step4c"))
       ),
 
       el("label", { class: "field" },
-        el("span", { class: "field__label", text: "Project URL" }), url),
+        el("span", { class: "field__label", text: t("projectUrl") }), url),
       el("label", { class: "field" },
-        el("span", { class: "field__label", text: "Publishable key" }), key),
+        el("span", { class: "field__label", text: t("publishableKey") }), key),
 
       save, msg,
 
-      el("p", { class: "hint", text: "الـ publishable key دي public بطبيعتها، مش سر. اللي بيحمي الداتا هو الـ RLS اللي في schema.sql. متحطش المفتاح السري (sb_secret_) هنا أبداً." }),
+      el("p", { class: "hint", text: t("keyNote") }),
 
       reconfigure
         ? el("button", {
-            class: "btn btn--ghost btn--block btn--sm", type: "button", text: "امسح الاتصال المحفوظ",
+            class: "btn btn--ghost btn--block btn--sm", type: "button", text: t("clearConn"),
             onclick: () => { clearConnection(); location.reload(); },
           })
         : null
@@ -764,36 +1108,37 @@ return {renderSetup};
 const __mod_auth = (function () {
 const {sb, el, clear, toast, errText, CONFIG} = __mod_core;
 const {renderSetup} = __mod_setup;
+const {t, langToggle} = __mod_i18n;
 function renderAuth(root) {
   clear(root);
   let mode = "login";
 
-  const title = el("h1", { class: "auth__title", text: CONFIG.appName });
-  const sub = el("p", { class: "auth__sub", text: "خط الشغل بتاعنا، في مكان واحد" });
+  const title = el("h1", { class: "auth__title", text: t("appName") });
+  const sub = el("p", { class: "auth__sub", text: t("authSub") });
 
   const nameField = el("label", { class: "field is-hidden" },
-    el("span", { class: "field__label", text: "الاسم" }),
-    el("input", { class: "input", id: "f-name", type: "text", autocomplete: "name", placeholder: "اسمك زي ما الناس بتناديك" })
+    el("span", { class: "field__label", text: t("fName") }),
+    el("input", { class: "input", id: "f-name", type: "text", autocomplete: "name", placeholder: t("namePlaceholder") })
   );
   const emailField = el("label", { class: "field" },
-    el("span", { class: "field__label", text: "الإيميل" }),
+    el("span", { class: "field__label", text: t("fEmail") }),
     el("input", { class: "input", id: "f-email", type: "email", autocomplete: "email", inputmode: "email", required: true, dir: "ltr" })
   );
   const passField = el("label", { class: "field" },
-    el("span", { class: "field__label", text: "الباسورد" }),
+    el("span", { class: "field__label", text: t("fPass") }),
     el("input", { class: "input", id: "f-pass", type: "password", autocomplete: "current-password", required: true, dir: "ltr", minlength: "6" })
   );
 
-  const submit = el("button", { class: "btn btn--primary btn--block", type: "submit", text: "دخول" });
-  const swap = el("button", { class: "btn btn--ghost btn--block", type: "button", text: "معنديش حساب — سجّل" });
+  const submit = el("button", { class: "btn btn--primary btn--block", type: "submit", text: t("login") });
+  const swap = el("button", { class: "btn btn--ghost btn--block", type: "button", text: t("noAccount") });
   const msg = el("p", { class: "auth__msg", role: "alert" });
 
   function setMode(next) {
     mode = next;
     const signup = mode === "signup";
     nameField.classList.toggle("is-hidden", !signup);
-    submit.textContent = signup ? "اعمل حساب" : "دخول";
-    swap.textContent = signup ? "عندي حساب — دخول" : "معنديش حساب — سجّل";
+    submit.textContent = signup ? t("signup") : t("login");
+    swap.textContent = signup ? t("haveAccount") : t("noAccount");
     passField.querySelector("input").autocomplete = signup ? "new-password" : "current-password";
     msg.textContent = "";
   }
@@ -810,11 +1155,11 @@ function renderAuth(root) {
     const name = form.querySelector("#f-name").value.trim();
 
     if (mode === "signup" && !name) {
-      msg.textContent = "اكتب اسمك عشان السواق يعرفك.";
+      msg.textContent = t("needName");
       return;
     }
     submit.disabled = true;
-    submit.textContent = "ثانية واحدة…";
+    submit.textContent = t("moment");
 
     try {
       if (mode === "signup") {
@@ -825,7 +1170,7 @@ function renderAuth(root) {
         if (error) throw error;
         const { error: e2 } = await sb.auth.signInWithPassword({ email, password: pass });
         if (e2) {
-          msg.textContent = "الحساب اتعمل. افتح إيميلك وأكّد الحساب وبعدين سجّل دخول.";
+          msg.textContent = t("confirmFirst");
           setMode("login");
           return;
         }
@@ -848,9 +1193,10 @@ function renderAuth(root) {
         el("span", { class: "auth__dot" }),
         el("span", { class: "auth__line" })
       ),
+      langToggle(el),
       title, sub, form,
       el("button", {
-        class: "linkbtn linkbtn--center", type: "button", text: "إعدادات الاتصال",
+        class: "linkbtn linkbtn--center", type: "button", text: t("connSettings"),
         onclick: () => renderSetup(root, { reconfigure: true }),
       })
     )
@@ -862,6 +1208,7 @@ return {renderAuth};
 /* ===== map.js ===== */
 const __mod_map = (function () {
 const {state, CONFIG, secondsSince} = __mod_core;
+const {t} = __mod_i18n;
 // أيقونة الباص
 function busIcon(stale) {
   return L.divIcon({
@@ -946,7 +1293,7 @@ function createMap(container) {
     if (!meMarker) {
       meMarker = L.circleMarker(pos, {
         radius: 7, color: "#ffb340", weight: 2, fillColor: "#ffb340", fillOpacity: 0.9,
-      }).addTo(map).bindPopup("إنت هنا");
+      }).addTo(map).bindPopup(t("youAreHere"));
     } else {
       meMarker.setLatLng(pos);
     }
@@ -979,6 +1326,7 @@ return {createMap};
 const __mod_today = (function () {
 const {sb, state, el, clear, toast, errText, todayISO, prettyDate, clockTime,
   agoText, canDrive, CONFIG, memberName,} = __mod_core;
+const {t} = __mod_i18n;
 let channel = null;
 let direction = "go";
 let serviceDate = todayISO();
@@ -1065,7 +1413,7 @@ async function setMyStatus(shell, status, note) {
   else attendance.push(payload);
 
   paint(shell);
-  toast(status === "in" ? "تمام، إنت معانا" : "تمام، سجّلناك مش معانا", "ok");
+  toast(status === "in" ? t("markedIn") : t("markedOut"), "ok");
 }
 
 // ============ الرسم ============
@@ -1083,11 +1431,11 @@ function paint(shell) {
 function noteComposer(shell) {
   const body = el("input", {
     class: "input input--sm", type: "text", maxlength: "140",
-    placeholder: "هتأخر ١٠ دقايق…",
+    placeholder: t("notePlaceholder"),
   });
   const send = async () => {
     const text = body.value.trim();
-    if (!text) return toast("اكتب الملاحظة الأول.", "bad");
+    if (!text) return toast(t("writeNoteFirst"), "bad");
     const { error } = await sb.from("notes").insert({
       author_id: state.profile.id,
       body: text,
@@ -1097,17 +1445,17 @@ function noteComposer(shell) {
     body.value = "";
     await loadData();
     paint(shell);
-    toast("وصلت للناس.", "ok");
+    toast(t("noteSent"), "ok");
   };
   body.addEventListener("keydown", (e) => { if (e.key === "Enter") send(); });
 
   return el("section", { class: "card" },
-    el("h3", { class: "card__title", text: "قول حاجة للركاب" }),
+    el("h3", { class: "card__title", text: t("sayToRiders") }),
     el("div", { class: "note-row" },
       body,
-      el("button", { class: "btn btn--primary btn--sm", type: "button", text: "ابعت", onclick: send })
+      el("button", { class: "btn btn--primary btn--sm", type: "button", text: t("send"), onclick: send })
     ),
-    el("p", { class: "hint", text: "الملاحظة بتختفي لوحدها بعد ١٢ ساعة." })
+    el("p", { class: "hint", text: t("noteExpires") })
   );
 }
 
@@ -1117,7 +1465,7 @@ function header() {
   return el("header", { class: "head" },
     el("div", {},
       el("p", { class: "head__eyebrow", text: prettyDate(serviceDate) }),
-      el("h2", { class: "head__title", text: direction === "go" ? "الرايحة" : "الرجعة" })
+      el("h2", { class: "head__title", text: direction === "go" ? t("dirGo") : t("dirBack") })
     ),
     el("div", { class: "count" },
       el("span", { class: "count__num", text: String(inCount) }),
@@ -1134,8 +1482,8 @@ function dirTabs(shell) {
       "aria-pressed": direction === key,
       onclick: () => { direction = key; paint(shell); },
     }, label);
-  return el("div", { class: "tabs", role: "group", "aria-label": "الاتجاه" },
-    mk("go", "الرايحة"), mk("back", "الرجعة")
+  return el("div", { class: "tabs", role: "group", "aria-label": t("route") },
+    mk("go", t("dirGo")), mk("back", t("dirBack"))
   );
 }
 
@@ -1145,7 +1493,7 @@ function myCard(shell) {
   const row = rowOf(me.id);
   const noteInput = el("input", {
     class: "input input--sm", type: "text", maxlength: "80",
-    placeholder: "ملاحظة للسواق (اختياري)", value: row?.note || "",
+    placeholder: t("noteToDriver"), value: row?.note || "",
   });
 
   const btn = (status, label) =>
@@ -1161,27 +1509,27 @@ function myCard(shell) {
   const late = direction === "go" && new Date().getHours() >= CONFIG.cutoffHourGo;
 
   return el("section", { class: "card" },
-    el("h3", { class: "card__title", text: "أنا النهاردة" }),
-    el("div", { class: "choices" }, btn("in", "معاكم"), btn("out", "مش معاكم")),
+    el("h3", { class: "card__title", text: t("meToday") }),
+    el("div", { class: "choices" }, btn("in", t("withYou")), btn("out", t("notWithYou"))),
     el("div", { class: "note-row" },
       noteInput,
       el("button", {
-        class: "btn btn--ghost btn--sm", type: "button", text: "احفظ",
+        class: "btn btn--ghost btn--sm", type: "button", text: t("save"),
         onclick: () => setMyStatus(shell, mine, noteInput.value.trim()),
       })
     ),
     row?.updated_at
-      ? el("p", { class: "hint", text: `آخر تعديل ${agoText(row.updated_at)}` })
-      : el("p", { class: "hint", text: "من غير ما تعمل حاجة إنت محسوب معانا." }),
+      ? el("p", { class: "hint", text: t("lastEdit") + agoText(row.updated_at) })
+      : el("p", { class: "hint", text: t("defaultIn") }),
     late && mine === "out"
-      ? el("p", { class: "hint hint--warn", text: "غيّرت بعد ميعاد التأكيد — ابعت للسواق كمان." })
+      ? el("p", { class: "hint hint--warn", text: t("lateWarn") })
       : null
   );
 }
 
 function notesBlock(shell) {
   return el("section", { class: "card card--note" },
-    el("h3", { class: "card__title", text: "من السواق" }),
+    el("h3", { class: "card__title", text: t("fromDriver") }),
     ...notes.map((n) =>
       el("div", { class: "note" },
         el("p", { class: "note__body", text: n.body }),
@@ -1189,7 +1537,7 @@ function notesBlock(shell) {
           el("p", { class: "note__meta", text: `${memberName(n.author_id)} · ${clockTime(n.created_at)}` }),
           n.author_id === state.profile.id
             ? el("button", {
-                class: "linkbtn", type: "button", text: "امسح",
+                class: "linkbtn", type: "button", text: t("del"),
                 onclick: async () => {
                   const { error } = await sb.from("notes").delete().eq("id", n.id);
                   if (error) return toast(errText(error), "bad");
@@ -1214,10 +1562,10 @@ function routeStrip() {
   const orphans = riders.filter(
     (r) => !state.points.some((p) => p.id === r.pickup_point_id)
   );
-  if (orphans.length) buckets.push({ point: { name: "من غير محطة", seq: "—" }, people: orphans });
+  if (orphans.length) buckets.push({ point: { name: t("noStop"), seq: "—" }, people: orphans });
 
   const strip = el("section", { class: "strip" },
-    el("h3", { class: "strip__title", text: "خط السير" })
+    el("h3", { class: "strip__title", text: t("route") })
   );
 
   buckets.forEach(({ point, people }) => {
@@ -1239,12 +1587,12 @@ function routeStrip() {
                     class: `chip chip--${st} ${p.id === state.profile.id ? "is-me" : ""}`,
                     title: r?.note || "",
                   },
-                    el("span", { class: "chip__name", text: p.full_name || "بدون اسم" }),
+                    el("span", { class: "chip__name", text: p.full_name || "—" }),
                     r?.note ? el("span", { class: "chip__note", text: r.note }) : null
                   );
                 })
               )
-            : el("p", { class: "hint", text: "مفيش حد على المحطة دي" })
+            : el("p", { class: "hint", text: t("noOneHere") })
         )
       )
     );
@@ -1254,11 +1602,11 @@ function routeStrip() {
     const out = riders.filter((r) => statusOf(r.id) === "out");
     strip.append(
       el("div", { class: "card card--sum" },
-        el("h3", { class: "card__title", text: "مش معانا النهاردة" }),
+        el("h3", { class: "card__title", text: t("outToday") }),
         out.length
           ? el("ul", { class: "chips" }, ...out.map((p) =>
               el("li", { class: "chip chip--out" }, p.full_name)))
-          : el("p", { class: "hint", text: "الكل معانا." })
+          : el("p", { class: "hint", text: t("everyoneIn") })
       )
     );
   }
@@ -1273,6 +1621,7 @@ const __mod_track = (function () {
 const {sb, state, el, clear, toast, errText, CONFIG, canDrive,
   agoText, secondsSince, distanceM, prettyDistance, memberName,} = __mod_core;
 const {createMap} = __mod_map;
+const {t} = __mod_i18n;
 let mapApi = null;
 let channel = null;
 let pollTimer = null;
@@ -1295,8 +1644,8 @@ async function render(root) {
   mapApi = createMap(mapBox);
 
   actions.append(
-    el("button", { class: "btn btn--ghost btn--sm", type: "button", text: "الكل في الشاشة", onclick: () => mapApi.fitAll() }),
-    el("button", { class: "btn btn--ghost btn--sm", type: "button", text: "الحق الباص", onclick: () => mapApi.recenterOnBus() })
+    el("button", { class: "btn btn--ghost btn--sm", type: "button", text: t("fitAll"), onclick: () => mapApi.fitAll() }),
+    el("button", { class: "btn btn--ghost btn--sm", type: "button", text: t("followBus"), onclick: () => mapApi.recenterOnBus() })
   );
 
   if (canDrive()) actions.prepend(driverToggle(status));
@@ -1356,7 +1705,7 @@ function paintStatus(box) {
   clear(box);
   if (!busLoc) {
     box.append(
-      el("div", { class: "pill pill--off" }, "الباص مش بيشارك مكانه دلوقتي")
+      el("div", { class: "pill pill--off" }, t("notSharing"))
     );
     return;
   }
@@ -1365,11 +1714,11 @@ function paintStatus(box) {
   box.append(
     el("div", { class: `pill ${stale ? "pill--stale" : "pill--live"}` },
       el("span", { class: "pill__dot" }),
-      el("span", { text: stale ? `آخر تحديث ${agoText(busLoc.updated_at)}` : "بيتحرك دلوقتي" })
+      el("span", { text: stale ? t("lastUpdate") + agoText(busLoc.updated_at) : t("movingNow") })
     ),
     el("div", { class: "track__meta" },
-      el("span", { text: `السواق: ${memberName(busLoc.driver_id)}` }),
-      dist !== null ? el("span", { class: "mono", text: `على بعد ${prettyDistance(dist)}` }) : null
+      el("span", { text: t("driverIs") + memberName(busLoc.driver_id) }),
+      dist !== null ? el("span", { class: "mono", text: t("awayBy") + prettyDistance(dist) }) : null
     )
   );
 }
@@ -1379,7 +1728,7 @@ function paintStatus(box) {
 function driverToggle(statusBox) {
   const btn = el("button", { class: "btn btn--primary btn--sm", type: "button" });
   const sync = () => {
-    btn.textContent = share.on ? "وقّف المشاركة" : "ابدأ شارك مكانك";
+    btn.textContent = share.on ? t("stopShare") : t("startShare");
     btn.classList.toggle("btn--danger", share.on);
     btn.classList.toggle("btn--primary", !share.on);
   };
@@ -1392,7 +1741,7 @@ function driverToggle(statusBox) {
 }
 
 async function startShare(statusBox) {
-  if (!navigator.geolocation) return toast("المتصفح ده مش بيدعم تحديد المكان.", "bad");
+  if (!navigator.geolocation) return toast(t("noGeo"), "bad");
 
   share.watchId = navigator.geolocation.watchPosition(
     async (pos) => {
@@ -1403,9 +1752,7 @@ async function startShare(statusBox) {
       await push(pos);
     },
     (err) => {
-      const m = err.code === 1
-        ? "لازم تسمح للموقع بتحديد مكانك من إعدادات المتصفح."
-        : "مش قادر يجيب مكانك دلوقتي.";
+      const m = err.code === 1 ? t("permDenied") : t("cantLocate");
       toast(m, "bad");
       stopShare();
     },
@@ -1415,7 +1762,7 @@ async function startShare(statusBox) {
   share.on = true;
   await requestWakeLock();
   document.addEventListener("visibilitychange", onVisible);
-  toast("بتشارك مكانك. سيب الشاشة مفتوحة والتليفون على الشاحن.", "ok");
+  toast(t("shareOn"), "ok");
   paintStatus(statusBox);
 }
 
@@ -1442,7 +1789,7 @@ async function stopShare() {
   await sb.from("driver_locations")
     .update({ is_sharing: false, updated_at: new Date().toISOString() })
     .eq("driver_id", state.profile.id);
-  toast("وقفت المشاركة.", "ok");
+  toast(t("shareOff"), "ok");
 }
 
 async function requestWakeLock() {
@@ -1467,6 +1814,7 @@ return {render, destroy, sharing};
 /* ===== money.js ===== */
 const __mod_money = (function () {
 const {sb, state, el, clear, toast, errText, isAdmin, shortDate, todayISO,} = __mod_core;
+const {t} = __mod_i18n;
 let periods = [];
 let payments = [];
 
@@ -1498,15 +1846,15 @@ function paint(shell) {
   clear(shell);
   shell.append(el("header", { class: "head" },
     el("div", {},
-      el("p", { class: "head__eyebrow", text: "الفلوس" }),
-      el("h2", { class: "head__title", text: isAdmin() ? "التحصيل" : "اللي عليّا" })
+      el("p", { class: "head__eyebrow", text: t("money") }),
+      el("h2", { class: "head__title", text: isAdmin() ? t("collection") : t("whatIOwe") })
     )
   ));
 
   if (isAdmin()) shell.append(newPeriodCard(shell));
 
   if (!periods.length) {
-    shell.append(el("p", { class: "empty", text: isAdmin() ? "مفيش فترات لسه. اعمل واحدة فوق." : "مفيش فلوس مطلوبة دلوقتي." }));
+    shell.append(el("p", { class: "empty", text: isAdmin() ? t("noPeriodsAdmin") : t("noPeriods") }));
     return;
   }
 
@@ -1515,8 +1863,8 @@ function paint(shell) {
     const due = mine.filter((x) => !x.row?.paid)
       .reduce((s, x) => s + Number(x.p.amount || 0), 0);
     shell.append(el("section", { class: "card card--total" },
-      el("p", { class: "card__label", text: "المتأخر عليك" }),
-      el("p", { class: "total mono", text: `${due.toFixed(0)} ج` })
+      el("p", { class: "card__label", text: t("outstanding") }),
+      el("p", { class: "total mono", text: `${due.toFixed(0)} ${t("currency")}` })
     ));
     mine.forEach(({ p, row }) => {
       const paid = !!row?.paid;
@@ -1526,8 +1874,8 @@ function paint(shell) {
           el("p", { class: "hint mono", text: `${shortDate(p.start_date)} — ${shortDate(p.end_date)}` })
         ),
         el("div", { class: "pay__right" },
-          el("span", { class: "mono amount", text: `${Number(p.amount).toFixed(0)} ج` }),
-          el("span", { class: `badge ${paid ? "badge--ok" : "badge--due"}`, text: paid ? "مدفوع" : "متأخر" })
+          el("span", { class: "mono amount", text: `${Number(p.amount).toFixed(0)} ${t("currency")}` }),
+          el("span", { class: `badge ${paid ? "badge--ok" : "badge--due"}`, text: paid ? t("paidBadge") : t("dueBadge") })
         )
       ));
     });
@@ -1551,7 +1899,7 @@ function paint(shell) {
             onchange: (e) => togglePaid(shell, p.id, r.id, e.target.checked),
           }),
           el("span", { class: "check__box", "aria-hidden": "true" }),
-          el("span", { class: "check__name", text: r.full_name || "بدون اسم" })
+          el("span", { class: "check__name", text: r.full_name || "—" })
         )
       ));
     });
@@ -1560,13 +1908,13 @@ function paint(shell) {
       el("div", { class: "card__head" },
         el("div", {},
           el("h3", { class: "card__title", text: p.label }),
-          el("p", { class: "hint mono", text: `${shortDate(p.start_date)} — ${shortDate(p.end_date)} · ${Number(p.amount).toFixed(0)} ج للفرد` })
+          el("p", { class: "hint mono", text: `${shortDate(p.start_date)} — ${shortDate(p.end_date)} · ${Number(p.amount).toFixed(0)} ${t("currency")}${t("perPerson")}` })
         ),
-        el("span", { class: "mono tally", text: `${collected.toFixed(0)} / ${target.toFixed(0)} ج` })
+        el("span", { class: "mono tally", text: `${collected.toFixed(0)} / ${target.toFixed(0)} ${t("currency")}` })
       ),
       list,
       el("button", {
-        class: "btn btn--ghost btn--sm", type: "button", text: "امسح الفترة دي",
+        class: "btn btn--ghost btn--sm", type: "button", text: t("deletePeriod"),
         onclick: () => removePeriod(shell, p),
       })
     ));
@@ -1574,19 +1922,19 @@ function paint(shell) {
 }
 
 function newPeriodCard(shell) {
-  const label = el("input", { class: "input input--sm", type: "text", placeholder: "اسم الفترة (مثلاً أسبوع ٣ أغسطس)" });
+  const label = el("input", { class: "input input--sm", type: "text", placeholder: t("periodName") });
   const start = el("input", { class: "input input--sm mono", type: "date", value: todayISO() });
   const end = el("input", { class: "input input--sm mono", type: "date", value: todayISO() });
-  const amount = el("input", { class: "input input--sm mono", type: "number", min: "0", step: "5", placeholder: "المبلغ للفرد" });
+  const amount = el("input", { class: "input input--sm mono", type: "number", min: "0", step: "5", placeholder: t("amountPerPerson") });
 
   return el("section", { class: "card" },
-    el("h3", { class: "card__title", text: "فترة جديدة" }),
+    el("h3", { class: "card__title", text: t("newPeriod") }),
     el("div", { class: "grid2" }, start, end),
     label, amount,
     el("button", {
-      class: "btn btn--primary btn--block btn--sm", type: "button", text: "اعمل الفترة",
+      class: "btn btn--primary btn--block btn--sm", type: "button", text: t("createPeriod"),
       onclick: async () => {
-        if (!label.value.trim()) return toast("اكتب اسم للفترة.", "bad");
+        if (!label.value.trim()) return toast(t("needLabel"), "bad");
         const { error } = await sb.from("payment_periods").insert({
           label: label.value.trim(),
           start_date: start.value,
@@ -1594,7 +1942,7 @@ function newPeriodCard(shell) {
           amount: Number(amount.value || 0),
         });
         if (error) return toast(errText(error), "bad");
-        toast("الفترة اتعملت.", "ok");
+        toast(t("periodCreated"), "ok");
         await load(); paint(shell);
       },
     })
@@ -1613,10 +1961,10 @@ async function togglePaid(shell, periodId, userId, paid) {
 }
 
 async function removePeriod(shell, p) {
-  if (!confirm(`تمسح "${p.label}" وكل الدفعات اللي فيها؟`)) return;
+  if (!confirm(t("confirmDeletePeriod") + ` — ${p.label}`)) return;
   const { error } = await sb.from("payment_periods").delete().eq("id", p.id);
   if (error) return toast(errText(error), "bad");
-  toast("اتمسحت.", "ok");
+  toast(t("deleted"), "ok");
   await load(); paint(shell);
 }
 return {render, destroy};
@@ -1625,10 +1973,11 @@ return {render, destroy};
 /* ===== manage.js ===== */
 const __mod_manage = (function () {
 const {sb, state, el, clear, toast, errText, loadMembers, loadPoints,} = __mod_core;
-const ROLES = [
-  ["passenger", "راكب"],
-  ["driver", "سواق"],
-  ["admin", "أدمن"],
+const {t} = __mod_i18n;
+const ROLES = () => [
+  ["passenger", t("rolePassenger")],
+  ["driver", t("roleDriver")],
+  ["admin", t("roleAdmin")],
 ];
 
 async function render(root) {
@@ -1649,12 +1998,12 @@ function paint(shell) {
   clear(shell);
   shell.append(el("header", { class: "head" },
     el("div", {},
-      el("p", { class: "head__eyebrow", text: "الإدارة" }),
-      el("h2", { class: "head__title", text: "المجموعة" })
+      el("p", { class: "head__eyebrow", text: t("manage") }),
+      el("h2", { class: "head__title", text: t("group") })
     ),
     el("div", { class: "count" },
       el("span", { class: "count__num", text: String(state.members.filter((m) => m.is_active).length) }),
-      el("span", { class: "count__of", text: "نشط" })
+      el("span", { class: "count__of", text: t("activeCount") })
     )
   ));
 
@@ -1666,13 +2015,13 @@ function membersCard(shell) {
   const list = el("div", { class: "rows" });
 
   state.members.forEach((m) => {
-    const roleSel = el("select", { class: "select", "aria-label": "الدور" },
-      ...ROLES.map(([v, t]) => el("option", { value: v, selected: m.role === v }, t))
+    const roleSel = el("select", { class: "select", "aria-label": t("rolePassenger") },
+      ...ROLES().map(([v, label]) => el("option", { value: v, selected: m.role === v }, label))
     );
     roleSel.addEventListener("change", () => update(shell, m.id, { role: roleSel.value }));
 
-    const pointSel = el("select", { class: "select", "aria-label": "المحطة" },
-      el("option", { value: "", selected: !m.pickup_point_id }, "— محطة —"),
+    const pointSel = el("select", { class: "select", "aria-label": t("myStop") },
+      el("option", { value: "", selected: !m.pickup_point_id }, t("pickStop")),
       ...state.points.map((p) => el("option", { value: String(p.id), selected: m.pickup_point_id === p.id }, p.name))
     );
     pointSel.addEventListener("change", () =>
@@ -1681,13 +2030,13 @@ function membersCard(shell) {
 
     const activeBtn = el("button", {
       class: `pillbtn ${m.is_active ? "is-on" : ""}`, type: "button",
-      text: m.is_active ? "نشط" : "موقوف",
+      text: m.is_active ? t("activeLbl") : t("stopped"),
       onclick: () => update(shell, m.id, { is_active: !m.is_active }),
     });
 
     list.append(el("div", { class: "row" },
       el("div", { class: "row__main" },
-        el("p", { class: "row__name", text: m.full_name || "بدون اسم" }),
+        el("p", { class: "row__name", text: m.full_name || "—" }),
         el("p", { class: "row__sub mono", text: m.phone || "" })
       ),
       el("div", { class: "row__controls" }, roleSel, pointSel, activeBtn)
@@ -1695,8 +2044,8 @@ function membersCard(shell) {
   });
 
   return el("section", { class: "card" },
-    el("h3", { class: "card__title", text: "الأعضاء" }),
-    el("p", { class: "hint", text: "أي حد بيعمل حساب بيظهر هنا كراكب. حدّد السواق والمحطات من هنا." }),
+    el("h3", { class: "card__title", text: t("members") }),
+    el("p", { class: "hint", text: t("membersHint") }),
     list
   );
 }
@@ -1706,41 +2055,41 @@ function pointsCard(shell) {
 
   state.points.forEach((p) => {
     const name = el("input", { class: "input input--sm", type: "text", value: p.name });
-    const seq = el("input", { class: "input input--sm mono", type: "number", value: String(p.seq ?? 0), min: "0", "aria-label": "الترتيب" });
-    const coords = el("p", { class: "row__sub mono", text: p.lat ? `${p.lat.toFixed(5)}, ${p.lng.toFixed(5)}` : "مفيش إحداثيات" });
+    const seq = el("input", { class: "input input--sm mono", type: "number", value: String(p.seq ?? 0), min: "0", "aria-label": t("order") });
+    const coords = el("p", { class: "row__sub mono", text: p.lat ? `${p.lat.toFixed(5)}, ${p.lng.toFixed(5)}` : t("noCoords") });
 
     list.append(el("div", { class: "row row--stack" },
       el("div", { class: "grid-seq" }, seq, name),
       coords,
       el("div", { class: "row__controls" },
         el("button", {
-          class: "btn btn--ghost btn--sm", type: "button", text: "احفظ",
+          class: "btn btn--ghost btn--sm", type: "button", text: t("save"),
           onclick: () => savePoint(shell, p.id, { name: name.value.trim(), seq: Number(seq.value || 0) }),
         }),
         el("button", {
-          class: "btn btn--ghost btn--sm", type: "button", text: "خد مكاني دلوقتي",
+          class: "btn btn--ghost btn--sm", type: "button", text: t("useMyLocation"),
           onclick: (e) => grabHere(shell, p.id, e.target),
         }),
         el("button", {
-          class: "btn btn--ghost btn--sm btn--danger", type: "button", text: "امسح",
+          class: "btn btn--ghost btn--sm btn--danger", type: "button", text: t("del"),
           onclick: () => removePoint(shell, p),
         })
       )
     ));
   });
 
-  const newName = el("input", { class: "input input--sm", type: "text", placeholder: "اسم محطة جديدة" });
+  const newName = el("input", { class: "input input--sm", type: "text", placeholder: t("newStopName") });
 
   return el("section", { class: "card" },
-    el("h3", { class: "card__title", text: "المحطات" }),
-    el("p", { class: "hint", text: "الترتيب هو ترتيب المحطة على خط السير. قف على المحطة واضغط «خد مكاني دلوقتي» عشان تتظبط على الخريطة." }),
+    el("h3", { class: "card__title", text: t("stops") }),
+    el("p", { class: "hint", text: t("stopsHint") }),
     list,
     el("div", { class: "note-row" },
       newName,
       el("button", {
-        class: "btn btn--primary btn--sm", type: "button", text: "زوّد",
+        class: "btn btn--primary btn--sm", type: "button", text: t("add"),
         onclick: async () => {
-          if (!newName.value.trim()) return toast("اكتب اسم المحطة.", "bad");
+          if (!newName.value.trim()) return toast(t("needStopName"), "bad");
           const seq = (state.points.at(-1)?.seq || 0) + 1;
           const { error } = await sb.from("pickup_points").insert({ name: newName.value.trim(), seq });
           if (error) return toast(errText(error), "bad");
@@ -1755,37 +2104,37 @@ function pointsCard(shell) {
 async function update(shell, id, patch) {
   const { error } = await sb.from("profiles").update(patch).eq("id", id);
   if (error) return toast(errText(error), "bad");
-  toast("اتحفظ.", "ok");
+  toast(t("saved"), "ok");
   await reload(shell);
 }
 
 async function savePoint(shell, id, patch) {
   const { error } = await sb.from("pickup_points").update(patch).eq("id", id);
   if (error) return toast(errText(error), "bad");
-  toast("اتحفظ.", "ok");
+  toast(t("saved"), "ok");
   await reload(shell);
 }
 
 function grabHere(shell, id, btn) {
-  if (!navigator.geolocation) return toast("المتصفح مش بيدعم تحديد المكان.", "bad");
+  if (!navigator.geolocation) return toast(t("noGeo"), "bad");
   btn.disabled = true;
-  btn.textContent = "بيجيب…";
+  btn.textContent = t("gettingLoc");
   navigator.geolocation.getCurrentPosition(
     async (pos) => {
       const { error } = await sb.from("pickup_points")
         .update({ lat: pos.coords.latitude, lng: pos.coords.longitude })
         .eq("id", id);
       if (error) toast(errText(error), "bad");
-      else toast("المحطة اتظبطت على مكانك.", "ok");
+      else toast(t("stopPinned"), "ok");
       await reload(shell);
     },
-    () => { toast("مش قادر يجيب مكانك.", "bad"); btn.disabled = false; btn.textContent = "خد مكاني دلوقتي"; },
+    () => { toast(t("cantLocate"), "bad"); btn.disabled = false; btn.textContent = t("useMyLocation"); },
     { enableHighAccuracy: true, timeout: 15000 }
   );
 }
 
 async function removePoint(shell, p) {
-  if (!confirm(`تمسح محطة "${p.name}"؟`)) return;
+  if (!confirm(`${t("confirmDeleteStop")} "${p.name}"?`)) return;
   const { error } = await sb.from("pickup_points").delete().eq("id", p.id);
   if (error) return toast(errText(error), "bad");
   await reload(shell);
@@ -1797,7 +2146,8 @@ return {render, destroy};
 const __mod_me = (function () {
 const {sb, state, el, clear, toast, errText, loadProfile, loadMembers, pointName, isAdmin,} = __mod_core;
 const {shareLink} = __mod_config;
-const ROLE_AR = { passenger: "راكب", driver: "سواق", admin: "أدمن" };
+const {t, langToggle} = __mod_i18n;
+const roleLabel = (r) => ({ passenger: t("rolePassenger"), driver: t("roleDriver"), admin: t("roleAdmin") }[r] || r);
 
 async function render(root) {
   clear(root);
@@ -1815,48 +2165,52 @@ function paint(shell) {
   const name = el("input", { class: "input", type: "text", value: me.full_name || "", maxlength: "40" });
   const phone = el("input", { class: "input mono", type: "tel", dir: "ltr", value: me.phone || "", maxlength: "20", placeholder: "01xxxxxxxxx" });
   const point = el("select", { class: "select select--block" },
-    el("option", { value: "", selected: !me.pickup_point_id }, "— اختار محطتك —"),
+    el("option", { value: "", selected: !me.pickup_point_id }, t("pickMyStop")),
     ...state.points.map((p) => el("option", { value: String(p.id), selected: me.pickup_point_id === p.id }, p.name))
   );
 
   shell.append(
     el("header", { class: "head" },
       el("div", {},
-        el("p", { class: "head__eyebrow", text: ROLE_AR[me.role] || me.role }),
-        el("h2", { class: "head__title", text: me.full_name || "حسابي" })
+        el("p", { class: "head__eyebrow", text: roleLabel(me.role) }),
+        el("h2", { class: "head__title", text: me.full_name || t("navMe") })
       )
     ),
     el("section", { class: "card" },
-      el("h3", { class: "card__title", text: "بياناتي" }),
-      el("label", { class: "field" }, el("span", { class: "field__label", text: "الاسم" }), name),
-      el("label", { class: "field" }, el("span", { class: "field__label", text: "الموبايل" }), phone),
-      el("label", { class: "field" }, el("span", { class: "field__label", text: "محطتي" }), point),
-      el("p", { class: "hint", text: `دلوقتي: ${pointName(me.pickup_point_id)}` }),
+      el("h3", { class: "card__title", text: t("myInfo") }),
+      el("label", { class: "field" }, el("span", { class: "field__label", text: t("fName") }), name),
+      el("label", { class: "field" }, el("span", { class: "field__label", text: t("phone") }), phone),
+      el("label", { class: "field" }, el("span", { class: "field__label", text: t("myStop") }), point),
+      el("p", { class: "hint", text: t("currently") + pointName(me.pickup_point_id) }),
       el("button", {
-        class: "btn btn--primary btn--block btn--sm", type: "button", text: "احفظ",
+        class: "btn btn--primary btn--block btn--sm", type: "button", text: t("save"),
         onclick: async () => {
           const patch = {
             full_name: name.value.trim(),
             phone: phone.value.trim() || null,
             pickup_point_id: point.value ? Number(point.value) : null,
           };
-          if (!patch.full_name) return toast("الاسم ماينفعش يفضل فاضي.", "bad");
+          if (!patch.full_name) return toast(t("nameRequired"), "bad");
           const { error } = await sb.from("profiles").update(patch).eq("id", me.id);
           if (error) return toast(errText(error), "bad");
           await loadProfile();
           await loadMembers();
-          toast("اتحفظ.", "ok");
+          toast(t("saved"), "ok");
           paint(shell);
         },
       })
     ),
     el("section", { class: "card" },
-      el("h3", { class: "card__title", text: "خلي التطبيق على الشاشة" }),
-      el("p", { class: "hint", text: "من قايمة المتصفح اختار «إضافة إلى الشاشة الرئيسية» عشان يفتح زي أي تطبيق من غير ما تكتب اللينك كل مرة." })
+      el("h3", { class: "card__title", text: t("language") }),
+      langToggle(el)
+    ),
+    el("section", { class: "card" },
+      el("h3", { class: "card__title", text: t("addToHome") }),
+      el("p", { class: "hint", text: t("addToHomeHint") })
     ),
     isAdmin() ? inviteCard() : null,
     el("button", {
-      class: "btn btn--ghost btn--block", type: "button", text: "خروج",
+      class: "btn btn--ghost btn--block", type: "button", text: t("logout"),
       onclick: async () => { await sb.auth.signOut(); },
     })
   );
@@ -1871,22 +2225,22 @@ function inviteCard() {
   box.addEventListener("focus", () => box.select());
 
   return el("section", { class: "card" },
-    el("h3", { class: "card__title", text: "لينك الجروب" }),
-    el("p", { class: "hint", text: "ابعت اللينك ده للناس بدل اللينك العادي. أي حد يفتحه هيتربط بالتطبيق أوتوماتيك من غير ما يكتب أي إعدادات." }),
+    el("h3", { class: "card__title", text: t("groupLink") }),
+    el("p", { class: "hint", text: t("groupLinkHint") }),
     box,
     el("button", {
-      class: "btn btn--primary btn--block btn--sm", type: "button", text: "انسخ اللينك",
+      class: "btn btn--primary btn--block btn--sm", type: "button", text: t("copyLink"),
       onclick: async () => {
         try {
           await navigator.clipboard.writeText(link);
-          toast("اتنسخ. ابعته للجروب.", "ok");
+          toast(t("linkCopied"), "ok");
         } catch {
           box.select();
-          toast("اضغط مطوّل على اللينك وانسخه.", "bad");
+          toast(t("copyManually"), "bad");
         }
       },
     }),
-    el("p", { class: "hint", text: "اللينك ده فيه مفتاح الاتصال — ابعته للجروب بس، مش في أي مكان عام." })
+    el("p", { class: "hint", text: t("linkWarn") })
   );
 }
 return {render, destroy};
@@ -1899,6 +2253,7 @@ const {sb, state, el, clear, errText, CONFIG,
 const {renderAuth} = __mod_auth;
 const {renderSetup} = __mod_setup;
 const {isConfigured} = __mod_config;
+const {t} = __mod_i18n;
 const today = __mod_today;
 const track = __mod_track;
 const money = __mod_money;
@@ -1908,12 +2263,12 @@ const app = document.getElementById("app");
 const ROUTES = { today, map: track, money, manage, me };
 let current = null;
 
-const NAV = [
-  { key: "today", label: "النهاردة", icon: "M4 5h16v11H4zM7 19v-2M17 19v-2M7 8h10" },
-  { key: "map", label: "الخريطة", icon: "M12 21s7-6.5 7-11a7 7 0 10-14 0c0 4.5 7 11 7 11z M12 10a1 1 0 100-2 1 1 0 000 2z" },
-  { key: "money", label: "الفلوس", icon: "M4 7h16v10H4z M12 14a2 2 0 100-4 2 2 0 000 4z" },
-  { key: "manage", label: "الإدارة", icon: "M4 6h16M4 12h16M4 18h10", admin: true },
-  { key: "me", label: "حسابي", icon: "M12 12a4 4 0 100-8 4 4 0 000 8z M5 20a7 7 0 0114 0" },
+const NAV = () => [
+  { key: "today", label: t("navToday"), icon: "M4 5h16v11H4zM7 19v-2M17 19v-2M7 8h10" },
+  { key: "map", label: t("navMap"), icon: "M12 21s7-6.5 7-11a7 7 0 10-14 0c0 4.5 7 11 7 11z M12 10a1 1 0 100-2 1 1 0 000 2z" },
+  { key: "money", label: t("navMoney"), icon: "M4 7h16v10H4z M12 14a2 2 0 100-4 2 2 0 000 4z" },
+  { key: "manage", label: t("navManage"), icon: "M4 6h16M4 12h16M4 18h10", admin: true },
+  { key: "me", label: t("navMe"), icon: "M12 12a4 4 0 100-8 4 4 0 000 8z M5 20a7 7 0 0114 0" },
 ];
 
 // ---------- إقلاع ----------
@@ -1947,7 +2302,7 @@ async function boot() {
 
 async function start() {
   clear(app);
-  app.append(el("div", { class: "boot" }, el("span", { class: "boot__dot" }), "ثانية واحدة…"));
+  app.append(el("div", { class: "boot" }, el("span", { class: "boot__dot" }), t("moment")));
   try {
     let profile = await loadProfile();
     // البروفايل بيتعمل بـ trigger، ساعات بيتأخر شوية بعد أول تسجيل
@@ -1958,8 +2313,8 @@ async function start() {
     if (!profile) {
       clear(app);
       app.append(el("div", { class: "view" },
-        el("p", { class: "empty", text: "الحساب اتعمل بس البروفايل مش موجود. تأكد إنك شغّلت schema.sql على Supabase." }),
-        el("button", { class: "btn btn--ghost btn--block", text: "خروج", onclick: () => sb.auth.signOut() })
+        el("p", { class: "empty", text: t("noProfile") }),
+        el("button", { class: "btn btn--ghost btn--block", text: t("logout"), onclick: () => sb.auth.signOut() })
       ));
       return;
     }
@@ -1971,7 +2326,7 @@ async function start() {
     clear(app);
     app.append(el("div", { class: "view" },
       el("p", { class: "empty", text: errText(e) }),
-      el("button", { class: "btn btn--ghost btn--block", text: "خروج", onclick: () => sb.auth.signOut() })
+      el("button", { class: "btn btn--ghost btn--block", text: t("logout"), onclick: () => sb.auth.signOut() })
     ));
   }
 }
@@ -1991,8 +2346,8 @@ function renderShell() {
 }
 
 function nav() {
-  const bar = el("nav", { class: "nav", "aria-label": "التنقل" });
-  NAV.filter((n) => !n.admin || isAdmin()).forEach((n) => {
+  const bar = el("nav", { class: "nav" });
+  NAV().filter((n) => !n.admin || isAdmin()).forEach((n) => {
     const a = el("a", {
       class: "nav__item", href: `#/${n.key}`, dataset: { key: n.key },
     },
@@ -2046,7 +2401,7 @@ window.addEventListener("beforeunload", (e) => {
   }
 });
 
-document.title = CONFIG.appName;
+document.title = t("appName");
 
 })();
 
