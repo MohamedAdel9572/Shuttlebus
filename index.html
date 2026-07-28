@@ -612,6 +612,15 @@ const DICT = {
     approvedToast: "اتقبل. حدّد دوره ومحطته من تحت.",
     revokedToast: "اتلغى قبوله.",
     confirmRevoke: "تلغي قبول",
+    reject: "ارفض",
+    confirmReject: "ترفض طلب",
+    rejectedToast: "اترفض.",
+    rejectedSection: "مرفوضين",
+    rejectedHint: "دول رفضتهم. لو ده كان بالغلط رجّعهم من هنا.",
+    restore: "رجّعه",
+    restoredToast: "رجع تاني للطلبات المستنية.",
+    rejectedTitle: "طلبك اترفض",
+    rejectedHintUser: "الأدمن رفض طلب انضمامك. لو تفتكر ده غلط كلّمه، ويقدر يرجّعك في أي وقت.",
 
     // الأخطاء
     eOffline: "مفيش نت. جرّب تاني.",
@@ -742,6 +751,15 @@ const DICT = {
     approvedToast: "Approved. Set their role and stop below.",
     revokedToast: "Approval revoked.",
     confirmRevoke: "Revoke approval for",
+    reject: "Reject",
+    confirmReject: "Reject the request from",
+    rejectedToast: "Rejected.",
+    rejectedSection: "Rejected",
+    rejectedHint: "You rejected these. If that was a mistake, put them back from here.",
+    restore: "Restore",
+    restoredToast: "Moved back to pending requests.",
+    rejectedTitle: "Your request was declined",
+    rejectedHintUser: "The admin declined your request to join. If you think that's a mistake, talk to them — they can restore you any time.",
 
     eOffline: "No connection. Try again.",
     eCreds: "Wrong email or password.",
@@ -885,7 +903,8 @@ const state = {
 const isDriver = () => state.profile?.role === "driver";
 const isAdmin = () => state.profile?.role === "admin";
 const canDrive = () => isDriver() || isAdmin();
-const isApproved = () => state.profile?.is_approved === true;
+const isApproved = () => state.profile?.is_approved === true && state.profile?.is_rejected !== true;
+const isRejected = () => state.profile?.is_rejected === true;
 
 // ---------- DOM ----------
 function el(tag, props = {}, ...kids) {
@@ -1035,7 +1054,7 @@ function memberName(id) {
   const m = state.members.find((x) => x.id === id);
   return m?.full_name || "—";
 }
-return {el, clear, todayISO, prettyDate, shortDate, clockTime, agoText, secondsSince, distanceM, prettyDistance, toast, errText, loadProfile, loadMembers, loadPoints, pointName, memberName, sb, state, isDriver, isAdmin, canDrive, isApproved, CONFIG};
+return {el, clear, todayISO, prettyDate, shortDate, clockTime, agoText, secondsSince, distanceM, prettyDistance, toast, errText, loadProfile, loadMembers, loadPoints, pointName, memberName, sb, state, isDriver, isAdmin, canDrive, isApproved, isRejected, CONFIG};
 })();
 
 /* ===== setup.js ===== */
@@ -2032,7 +2051,7 @@ function paint(shell) {
       el("h2", { class: "head__title", text: t("group") })
     ),
     el("div", { class: "count" },
-      el("span", { class: "count__num", text: String(state.members.filter((m) => m.is_active && m.is_approved).length) }),
+      el("span", { class: "count__num", text: String(state.members.filter((m) => m.is_active && m.is_approved && !m.is_rejected).length) }),
       el("span", { class: "count__of", text: t("activeCount") })
     )
   ));
@@ -2040,11 +2059,13 @@ function paint(shell) {
   shell.append(requestsCard(shell));
   shell.append(membersCard(shell));
   shell.append(pointsCard(shell));
+  const rej = rejectedCard(shell);
+  if (rej) shell.append(rej);
 }
 
 // الطلبات المستنية موافقة — أهم حاجة في الشاشة فبتيجي فوق
 function requestsCard(shell) {
-  const pending = state.members.filter((m) => !m.is_approved);
+  const pending = state.members.filter((m) => !m.is_approved && !m.is_rejected);
   const list = el("div", { class: "rows" });
 
   pending.forEach((m) => {
@@ -2056,7 +2077,11 @@ function requestsCard(shell) {
       el("div", { class: "row__controls" },
         el("button", {
           class: "btn btn--primary btn--sm", type: "button", text: t("approve"),
-          onclick: () => setApproved(shell, m.id, true),
+          onclick: () => decide(shell, m.id, "approve"),
+        }),
+        el("button", {
+          class: "btn btn--ghost btn--sm btn--danger", type: "button", text: t("reject"),
+          onclick: () => decide(shell, m.id, "reject"),
         })
       )
     ));
@@ -2077,21 +2102,58 @@ function requestsCard(shell) {
   );
 }
 
-async function setApproved(shell, id, value) {
-  if (!value) {
-    const who = state.members.find((m) => m.id === id);
-    if (!confirm(`${t("confirmRevoke")} "${who?.full_name || ""}"?`)) return;
-  }
-  const { error } = await sb.from("profiles").update({ is_approved: value }).eq("id", id);
+// قرار واحد لكل الحالات: قبول / رفض / إلغاء قبول / إرجاع
+async function decide(shell, id, action) {
+  const who = state.members.find((m) => m.id === id);
+  const name = who?.full_name || "";
+
+  const plans = {
+    approve: { patch: { is_approved: true,  is_rejected: false }, done: "approvedToast" },
+    reject:  { patch: { is_approved: false, is_rejected: true  }, done: "rejectedToast", ask: "confirmReject" },
+    revoke:  { patch: { is_approved: false, is_rejected: false }, done: "revokedToast",  ask: "confirmRevoke" },
+    restore: { patch: { is_approved: false, is_rejected: false }, done: "restoredToast" },
+  };
+  const plan = plans[action];
+  if (plan.ask && !confirm(`${t(plan.ask)} "${name}"?`)) return;
+
+  const { error } = await sb.from("profiles").update(plan.patch).eq("id", id);
   if (error) return toast(errText(error), "bad");
-  toast(value ? t("approvedToast") : t("revokedToast"), "ok");
+  toast(t(plan.done), "ok");
   await reload(shell);
+}
+
+// المرفوضين — قسم صغير تحت، عشان الرفض مايبقاش طريق مقفول
+function rejectedCard(shell) {
+  const rejected = state.members.filter((m) => m.is_rejected);
+  if (!rejected.length) return null;
+
+  const list = el("div", { class: "rows" });
+  rejected.forEach((m) => {
+    list.append(el("div", { class: "row" },
+      el("div", { class: "row__main" },
+        el("p", { class: "row__name", text: m.full_name || "—" }),
+        el("p", { class: "row__sub mono", text: m.phone || "" })
+      ),
+      el("div", { class: "row__controls" },
+        el("button", {
+          class: "btn btn--ghost btn--sm", type: "button", text: t("restore"),
+          onclick: () => decide(shell, m.id, "restore"),
+        })
+      )
+    ));
+  });
+
+  return el("section", { class: "card" },
+    el("h3", { class: "card__title", text: t("rejectedSection") }),
+    el("p", { class: "hint", text: t("rejectedHint") }),
+    list
+  );
 }
 
 function membersCard(shell) {
   const list = el("div", { class: "rows" });
 
-  state.members.filter((m) => m.is_approved).forEach((m) => {
+  state.members.filter((m) => m.is_approved && !m.is_rejected).forEach((m) => {
     const roleSel = el("select", { class: "select", "aria-label": t("rolePassenger") },
       ...ROLES().map(([v, label]) => el("option", { value: v, selected: m.role === v }, label))
     );
@@ -2119,7 +2181,7 @@ function membersCard(shell) {
       el("div", { class: "row__controls" }, roleSel, pointSel, activeBtn,
         el("button", {
           class: "btn btn--ghost btn--sm btn--danger", type: "button", text: t("revoke"),
-          onclick: () => setApproved(shell, m.id, false),
+          onclick: () => decide(shell, m.id, "revoke"),
         })
       )
     ));
@@ -2331,7 +2393,7 @@ return {render, destroy};
 /* ===== app.js ===== */
 const __mod_app = (function () {
 const {sb, state, el, clear, errText, toast, CONFIG,
-  loadProfile, loadMembers, loadPoints, isAdmin, isApproved,} = __mod_core;
+  loadProfile, loadMembers, loadPoints, isAdmin, isApproved, isRejected,} = __mod_core;
 const {renderAuth} = __mod_auth;
 const {renderSetup} = __mod_setup;
 const {isConfigured} = __mod_config;
@@ -2401,7 +2463,7 @@ async function start() {
       return;
     }
     if (!isApproved()) {
-      renderPending();
+      renderPending(isRejected());
       return;
     }
     await Promise.all([loadMembers(), loadPoints()]);
@@ -2418,7 +2480,7 @@ async function start() {
 }
 
 // اللي لسه مستنّي موافقة الأدمن مايشوفش التطبيق
-function renderPending() {
+function renderPending(rejected = false) {
   clear(app);
   app.append(
     el("div", { class: "auth" },
@@ -2426,10 +2488,10 @@ function renderPending() {
         el("span", { class: "auth__dot" }),
         el("span", { class: "auth__line" })
       ),
-      el("h1", { class: "auth__title", text: t("pendingTitle") }),
-      el("p", { class: "auth__sub", text: t("pendingHint") }),
+      el("h1", { class: "auth__title", text: t(rejected ? "rejectedTitle" : "pendingTitle") }),
+      el("p", { class: "auth__sub", text: t(rejected ? "rejectedHintUser" : "pendingHint") }),
       el("p", { class: "hint", text: t("pendingSignedAs") + (state.profile.full_name || "") }),
-      el("button", {
+      rejected ? null : el("button", {
         class: "btn btn--primary btn--block", type: "button", text: t("pendingRefresh"),
         onclick: async () => {
           await loadProfile();
