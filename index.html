@@ -709,8 +709,15 @@ function renderSetup(root, { reconfigure = false } = {}) {
       msg.textContent = "الرابط شكله مش مظبوط. لازم يبقى زي https://xxxxx.supabase.co";
       return;
     }
-    if (k.split(".").length !== 3) {
-      msg.textContent = "المفتاح ناقص. خد الـ anon public key كامل من Project Settings ← API.";
+    // Supabase ليها نوعين مفاتيح: الجديد sb_publishable_ والقديم JWT
+    const isNew = k.startsWith("sb_publishable_");
+    const isLegacy = k.startsWith("eyJ") && k.split(".").length === 3;
+    if (k.startsWith("sb_secret_") || k.includes("service_role")) {
+      msg.textContent = "ده المفتاح السري. استخدم الـ publishable key بدل منه — السري ملوش لازمة هنا وخطر يتحط في المتصفح.";
+      return;
+    }
+    if (!isNew && !isLegacy) {
+      msg.textContent = "المفتاح شكله مش مظبوط. لازم يبدأ بـ sb_publishable_ أو eyJ — من Project Settings ← API Keys.";
       return;
     }
     saveConnection(u, k);
@@ -729,17 +736,17 @@ function renderSetup(root, { reconfigure = false } = {}) {
         el("li", {}, "افتح ", el("span", { class: "mono", text: "supabase.com" }), " واعمل مشروع جديد — مجاني ومش بيطلب فيزا."),
         el("li", {}, "من ", el("strong", { text: "SQL Editor" }), " الصق ملف ", el("span", { class: "mono", text: "schema.sql" }), " واضغط Run."),
         el("li", {}, "من ", el("strong", { text: "Authentication ← Providers ← Email" }), " اقفل ", el("span", { class: "mono", text: "Confirm email" }), "."),
-        el("li", {}, "من ", el("strong", { text: "Project Settings ← API" }), " انسخ الاتنين اللي تحت.")
+        el("li", {}, "من ", el("strong", { text: "Project Settings ← API Keys" }), " انسخ الاتنين اللي تحت — المفتاح اللي بيبدأ بـ ", el("span", { class: "mono", text: "sb_publishable_" }), " مش السري.")
       ),
 
       el("label", { class: "field" },
         el("span", { class: "field__label", text: "Project URL" }), url),
       el("label", { class: "field" },
-        el("span", { class: "field__label", text: "anon public key" }), key),
+        el("span", { class: "field__label", text: "Publishable key" }), key),
 
       save, msg,
 
-      el("p", { class: "hint", text: "الـ anon key دي public بطبيعتها، مش سر. اللي بيحمي الداتا هو الـ RLS اللي في schema.sql. متحطش الـ service_role key هنا أبداً." }),
+      el("p", { class: "hint", text: "الـ publishable key دي public بطبيعتها، مش سر. اللي بيحمي الداتا هو الـ RLS اللي في schema.sql. متحطش المفتاح السري (sb_secret_) هنا أبداً." }),
 
       reconfigure
         ? el("button", {
