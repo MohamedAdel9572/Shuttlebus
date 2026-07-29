@@ -784,6 +784,16 @@ const DICT = {
     pickupStop: "محطة الركوب",
     dropoffHint: "سيبها «نفس محطة الركوب» غير لو بتنزل في مكان تاني في الرجعة.",
     startPoint: "نقطة البداية", setStart: "خليها البداية", isStart: "البداية",
+    destination: "وجهة المجموعة", setDestination: "خليها الوجهة", isDestination: "الوجهة",
+    destinationHint: "المكان اللي الكل رايحه (الشغل / الجامعة). لما تحدده، الركاب مش هيحتاجوا يكتبوه.",
+
+    // محطات الرحلتين
+    tripMorning: "الرايحة (الصبح)", tripEvening: "الرجعة (بالليل)",
+    iBoardAt: "أركب من", iGetOffAt: "أنزل في",
+    sameAsDestination: "وجهة المجموعة",
+    pickAStop: "— اختار —",
+    tripsHint: "حدّد محطتك في كل رحلة. اللي سايبه «وجهة المجموعة» معناه المكان اللي الكل رايحه.",
+    noDestinationYet: "الأدمن لسه محددش وجهة للمجموعة.",
     startHint: "المكان اللي الباص بيتحرّك منه. مالهاش ركاب — بتظهر بس في أول خط السير.",
     driverNoStop: "السواق مالوش محطة — هو اللي بيمر عليها كلها.",
     subsPriority: "المشتركين ليهم مكان محجوز. اللي بالمرة بياخد من الفاضل بعدهم.",
@@ -999,6 +1009,15 @@ const DICT = {
     pickupStop: "Pickup stop",
     dropoffHint: "Leave it as \"same as pickup\" unless you get off somewhere else on the way back.",
     startPoint: "Start point", setStart: "Make this the start", isStart: "Start",
+    destination: "Group destination", setDestination: "Make this the destination", isDestination: "Destination",
+    destinationHint: "Where everyone is heading (work / campus). Once set, riders don't have to pick it themselves.",
+
+    tripMorning: "Morning trip", tripEvening: "Evening trip",
+    iBoardAt: "I get on at", iGetOffAt: "I get off at",
+    sameAsDestination: "Group destination",
+    pickAStop: "— pick one —",
+    tripsHint: "Set your stop for each trip. Anything left on \"group destination\" means the place everyone goes.",
+    noDestinationYet: "The admin hasn't set a group destination yet.",
     startHint: "Where the bus sets off from. No riders — it just shows at the top of the route.",
     driverNoStop: "The driver has no stop — they pass through all of them.",
     subsPriority: "Subscribers have a held seat. Occasional riders take whatever's left after them.",
@@ -1394,6 +1413,21 @@ const dayRate = () => Number(state.settings?.day_rate || 0);
 const paymentUrl = () => state.settings?.payment_url || "";
 const paymentNote = () => state.settings?.payment_note || "";
 
+const startPoint = () => state.points.find((p) => p.is_start) || null;
+const destinationPoint = () => state.points.find((p) => p.is_destination) || null;
+
+// محطة الراكب في رحلة معيّنة. فاضي = وجهة المجموعة
+function stopOf(rider, trip) {
+  const dest = destinationPoint()?.id || null;
+  switch (trip) {
+    case "morningPickup":  return rider?.pickup_point_id || null;
+    case "morningDropoff": return rider?.morning_dropoff_id || dest;
+    case "eveningPickup":  return rider?.evening_pickup_id || dest;
+    case "eveningDropoff": return rider?.dropoff_point_id || rider?.pickup_point_id || null;
+    default: return null;
+  }
+}
+
 function pointName(id) {
   return state.points.find((p) => p.id === id)?.name || t("noStop");
 }
@@ -1402,7 +1436,7 @@ function memberName(id) {
   const m = state.members.find((x) => x.id === id);
   return m?.full_name || "—";
 }
-return {el, clear, todayISO, prettyDate, shortDate, clockTime, agoText, secondsSince, distanceM, prettyDistance, toast, errText, loadProfile, loadMembers, loadPoints, loadSettings, activeRiders, pointName, memberName, sb, state, isDriver, isAdmin, canDrive, isApproved, isRejected, riderCount, primaryRiders, primaryCount, isCasual, busCapacity, defaultIn, dayRate, paymentUrl, paymentNote, CONFIG};
+return {el, clear, todayISO, prettyDate, shortDate, clockTime, agoText, secondsSince, distanceM, prettyDistance, toast, errText, loadProfile, loadMembers, loadPoints, loadSettings, activeRiders, stopOf, pointName, memberName, sb, state, isDriver, isAdmin, canDrive, isApproved, isRejected, riderCount, primaryRiders, primaryCount, isCasual, busCapacity, defaultIn, dayRate, paymentUrl, paymentNote, startPoint, destinationPoint, CONFIG};
 })();
 
 /* ===== setup.js ===== */
@@ -1742,7 +1776,7 @@ return {createMap};
 const __mod_today = (function () {
 const {sb, state, el, clear, toast, errText, todayISO, prettyDate, clockTime,
   agoText, canDrive, CONFIG, memberName, busCapacity, defaultIn, riderCount,
-  activeRiders, isCasual,} = __mod_core;
+  activeRiders, isCasual, stopOf, destinationPoint,} = __mod_core;
 const {t} = __mod_i18n;
 let channel = null;
 let direction = "go";
@@ -2000,16 +2034,16 @@ function notesBlock(shell) {
 }
 
 // العنصر المميز: خط السير بالمحطات والركاب على كل محطة
-// في الرايحة بنتجمّع على محطة الركوب، وفي الرجعة على محطة النزول
+// السواق محتاج يعرف: الصبح بياخده منين، وبالليل بينزله فين
 function stopFor(rider) {
-  if (direction === "back") return rider.dropoff_point_id || rider.pickup_point_id;
-  return rider.pickup_point_id;
+  return stopOf(rider, direction === "back" ? "eveningDropoff" : "morningPickup");
 }
 
 function routeStrip() {
   const riders = activeRiders();
   const start = state.points.find((p) => p.is_start);
-  const stops = state.points.filter((p) => !p.is_start);
+  const dest = destinationPoint();
+  const stops = state.points.filter((p) => !p.is_start && !p.is_destination);
   // الباص راجع بالعكس، فترتيب المحطات بيتقلب
   const order = direction === "back" ? [...stops].reverse() : stops;
   const buckets = order.map((p) => ({
@@ -2025,18 +2059,21 @@ function routeStrip() {
     el("h3", { class: "strip__title", text: t("route") })
   );
 
-  // نقطة البداية — مالهاش ركاب، بتوضّح بس الباص بيتحرّك منين
-  if (start && direction === "go") {
-    strip.append(el("div", { class: "stop stop--start" },
+  // عقدة ثابتة من غير ركاب — بداية أو وجهة
+  const anchor = (point, labelKey) =>
+    el("div", { class: "stop stop--start" },
       el("div", { class: "stop__marker stop__marker--start" }, "◆"),
       el("div", { class: "stop__body" },
         el("div", { class: "stop__head" },
-          el("h4", { class: "stop__name", text: start.name }),
-          el("span", { class: "stop__count", text: t("isStart") })
+          el("h4", { class: "stop__name", text: point.name }),
+          el("span", { class: "stop__count", text: t(labelKey) })
         )
       )
-    ));
-  }
+    );
+
+  // الرايحة: البداية فوق. الرجعة: الوجهة فوق (الباص بيتحرّك من الشغل)
+  if (direction === "go" && start) strip.append(anchor(start, "isStart"));
+  if (direction === "back" && dest) strip.append(anchor(dest, "isDestination"));
 
   buckets.forEach(({ point, people }) => {
     const onboard = people.filter((p) => statusOf(p.id) === "in").length;
@@ -2068,17 +2105,8 @@ function routeStrip() {
     );
   });
 
-  if (start && direction === "back") {
-    strip.append(el("div", { class: "stop stop--start" },
-      el("div", { class: "stop__marker stop__marker--start" }, "◆"),
-      el("div", { class: "stop__body" },
-        el("div", { class: "stop__head" },
-          el("h4", { class: "stop__name", text: start.name }),
-          el("span", { class: "stop__count", text: t("isStart") })
-        )
-      )
-    ));
-  }
+  // الرايحة بتخلص عند الوجهة
+  if (direction === "go" && dest) strip.append(anchor(dest, "isDestination"));
 
   if (canDrive()) {
     const out = riders.filter((r) => statusOf(r.id) === "out");
@@ -2999,7 +3027,12 @@ function pointsCard(shell) {
         el("button", {
           class: `pillbtn ${p.is_start ? "is-on" : ""}`, type: "button",
           text: p.is_start ? t("isStart") : t("setStart"),
-          onclick: () => setStart(shell, p.id, !p.is_start),
+          onclick: () => setFlag(shell, p.id, "is_start", !p.is_start),
+        }),
+        el("button", {
+          class: `pillbtn ${p.is_destination ? "is-on" : ""}`, type: "button",
+          text: p.is_destination ? t("isDestination") : t("setDestination"),
+          onclick: () => setFlag(shell, p.id, "is_destination", !p.is_destination),
         }),
         el("button", {
           class: "btn btn--ghost btn--sm", type: "button", text: t("save"),
@@ -3023,6 +3056,7 @@ function pointsCard(shell) {
     el("h3", { class: "card__title", text: t("stops") }),
     el("p", { class: "hint", text: t("stopsHint") }),
     el("p", { class: "hint", text: t("startHint") }),
+    el("p", { class: "hint", text: t("destinationHint") }),
     list,
     el("div", { class: "note-row" },
       newName,
@@ -3048,13 +3082,13 @@ async function update(shell, id, patch) {
   await reload(shell);
 }
 
-// محطة بداية واحدة بس — نشيلها من الباقي الأول
-async function setStart(shell, id, value) {
+// محطة واحدة بس تكون بداية، وواحدة بس تكون وجهة
+async function setFlag(shell, id, field, value) {
   if (value) {
-    const { error: e1 } = await sb.from("pickup_points").update({ is_start: false }).eq("is_start", true);
+    const { error: e1 } = await sb.from("pickup_points").update({ [field]: false }).eq(field, true);
     if (e1) return toast(errText(e1), "bad");
   }
-  const { error } = await sb.from("pickup_points").update({ is_start: value }).eq("id", id);
+  const { error } = await sb.from("pickup_points").update({ [field]: value }).eq("id", id);
   if (error) return toast(errText(error), "bad");
   toast(t("saved"), "ok");
   await reload(shell);
@@ -3105,7 +3139,8 @@ return {render, destroy};
 
 /* ===== me.js ===== */
 const __mod_me = (function () {
-const {sb, state, el, clear, toast, errText, loadProfile, loadMembers, pointName, isAdmin,} = __mod_core;
+const {sb, state, el, clear, toast, errText, loadProfile, loadMembers, pointName, isAdmin,
+  destinationPoint,} = __mod_core;
 const {shareLink} = __mod_config;
 const {t, langToggle} = __mod_i18n;
 const roleLabel = (r) => ({ passenger: t("rolePassenger"), driver: t("roleDriver"), admin: t("roleAdmin") }[r] || r);
@@ -3126,14 +3161,35 @@ function paint(shell) {
 
   const name = el("input", { class: "input", type: "text", value: me.full_name || "", maxlength: "40" });
   const phone = el("input", { class: "input mono", type: "tel", dir: "ltr", value: me.phone || "", maxlength: "20", placeholder: "01xxxxxxxxx" });
-  const point = el("select", { class: "select select--block" },
-    el("option", { value: "", selected: !me.pickup_point_id }, t("pickMyStop")),
-    ...state.points.map((p) => el("option", { value: String(p.id), selected: me.pickup_point_id === p.id }, p.name))
-  );
-  const drop = el("select", { class: "select select--block" },
-    el("option", { value: "", selected: !me.dropoff_point_id }, t("sameAsPickup")),
-    ...state.points.map((p) => el("option", { value: String(p.id), selected: me.dropoff_point_id === p.id }, p.name))
-  );
+  const dest = destinationPoint();
+
+  // خانة محطة — مكتوب عليها الجملة كاملة عشان محدش يحتار بيختار لإيه
+  const stopSelect = (currentId, allowDestination) => {
+    const sel = el("select", { class: "select select--block" },
+      el("option", { value: "", selected: !currentId },
+        allowDestination
+          ? (dest ? `${t("sameAsDestination")} — ${dest.name}` : t("noDestinationYet"))
+          : t("pickAStop")),
+      ...state.points
+        .filter((p) => !p.is_start)
+        .map((p) => el("option", { value: String(p.id), selected: currentId === p.id }, p.name))
+    );
+    return sel;
+  };
+
+  const mPickup  = stopSelect(me.pickup_point_id, false);
+  const mDropoff = stopSelect(me.morning_dropoff_id, true);
+  const ePickup  = stopSelect(me.evening_pickup_id, true);
+  const eDropoff = stopSelect(me.dropoff_point_id, false);
+
+  const tripCard = (title, board, off) =>
+    el("section", { class: "card" },
+      el("h3", { class: "card__title", text: title }),
+      el("label", { class: "field" },
+        el("span", { class: "field__label", text: t("iBoardAt") }), board),
+      el("label", { class: "field" },
+        el("span", { class: "field__label", text: t("iGetOffAt") }), off)
+    );
 
   shell.append(
     el("header", { class: "head" },
@@ -3146,11 +3202,7 @@ function paint(shell) {
       el("h3", { class: "card__title", text: t("myInfo") }),
       el("label", { class: "field" }, el("span", { class: "field__label", text: t("fName") }), name),
       el("label", { class: "field" }, el("span", { class: "field__label", text: t("phone") }), phone),
-      ...(p_isDriver ? [el("p", { class: "hint", text: t("driverNoStop") })] : [
-        el("label", { class: "field" }, el("span", { class: "field__label", text: t("pickupStop") }), point),
-        el("label", { class: "field" }, el("span", { class: "field__label", text: t("dropoffStop") }), drop),
-        el("p", { class: "hint", text: t("dropoffHint") }),
-      ]),
+
       el("button", {
         class: "btn btn--primary btn--block btn--sm", type: "button", text: t("save"),
         onclick: async () => {
@@ -3158,8 +3210,10 @@ function paint(shell) {
             full_name: name.value.trim(),
             phone: phone.value.trim() || null,
             ...(p_isDriver ? {} : {
-              pickup_point_id: point.value ? Number(point.value) : null,
-              dropoff_point_id: drop.value ? Number(drop.value) : null,
+              pickup_point_id:    mPickup.value  ? Number(mPickup.value)  : null,
+              morning_dropoff_id: mDropoff.value ? Number(mDropoff.value) : null,
+              evening_pickup_id:  ePickup.value  ? Number(ePickup.value)  : null,
+              dropoff_point_id:   eDropoff.value ? Number(eDropoff.value) : null,
             }),
           };
           if (!patch.full_name) return toast(t("nameRequired"), "bad");
@@ -3172,6 +3226,11 @@ function paint(shell) {
         },
       })
     ),
+    ...(p_isDriver ? [] : [
+      tripCard(t("tripMorning"), mPickup, mDropoff),
+      tripCard(t("tripEvening"), ePickup, eDropoff),
+      el("p", { class: "hint", text: t("tripsHint") }),
+    ]),
     el("section", { class: "card" },
       el("h3", { class: "card__title", text: t("language") }),
       langToggle(el)
