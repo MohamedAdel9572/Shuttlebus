@@ -722,13 +722,29 @@ const DICT = {
 
     // نوع الراكب
     memberType: "النوع",
-    typePrimary: "أساسي", typeCasual: "بالمرة",
-    typeHint: "الأساسي ليه مكان ثابت وبيدفع نصيبه في الفترة. اللي بالمرة بيركب لما يبقى فيه فاضي وبيدفع باليوم.",
+    typePrimary: "مشترك", typeCasual: "بالمرة",
+    typeHint: "المشترك ليه مكان محجوز وبيدفع نصيبه من إجمالي الفترة. اللي بالمرة بياخد مكان فاضي وبيدفع باليوم، وفلوسه بتقلّل اللي على المشتركين.",
     dayRate: "سعر اليوم", dayRateHint: "اللي بالمرة بيتحسب عليه ده عن كل يوم ركب فيه.",
     casualNeedsSeat: "لازم تأكّد كل يوم عايز تركب فيه — مكانك مش محجوز.",
     daysRidden: (n) => `${n} يوم`,
     perDay: " / اليوم",
-    splitAmong: (n) => `يتقسّم على ${n} أساسي`,
+    splitAmong: (n) => `يتقسّم على ${n} مشترك`,
+    totalCost: "إجمالي تكلفة الفترة",
+    totalCostHint: "اكتب تكلفة الباص للفترة كلها. نصيب كل مشترك بيتحسب لوحده، ولو حد جديد دخل النصيب بيقل.",
+    shareNow: (each, n) => `دلوقتي ${each} على كل واحد · ${n} مشترك`,
+    casualCredit: (amt) => `ناقص ${amt} من اللي بالمرة`,
+    perPeriod: "للفترة",
+    shareChanges: "النصيب بيتغيّر لو العدد اتغيّر.",
+
+    // مشاركة المكان
+    shareAutoStop: "المشاركة بتقف لوحدها بعد ساعة.",
+    shareStopped: "وقفت المشاركة لوحدها بعد ساعة. دوس تاني لو لسه في الطريق.",
+    shareTimeLeft: (m) => `فاضل ${m} دقيقة`,
+
+    // النزول
+    dropoffStop: "محطة النزول", sameAsPickup: "نفس محطة الركوب",
+    pickupStop: "محطة الركوب",
+    dropoffHint: "سيبها «نفس محطة الركوب» غير لو بتنزل في مكان تاني في الرجعة.",
 
     // الدفع
     paymentLink: "لينك الدفع", payNow: "ادفع",
@@ -903,13 +919,27 @@ const DICT = {
     groupBiggerWarn: "The group is bigger than the bus — better to set the default to \"nobody until they confirm\".",
 
     memberType: "Type",
-    typePrimary: "Regular", typeCasual: "Occasional",
-    typeHint: "Regulars have a standing seat and pay their share of the period. Occasional riders take a free seat and pay by the day.",
+    typePrimary: "Subscribed", typeCasual: "Occasional",
+    typeHint: "Subscribed riders have a held seat and pay a share of the period total. Occasional riders take a free seat and pay by the day, which lowers what the subscribers owe.",
     dayRate: "Day rate", dayRateHint: "Occasional riders are charged this for every day they ride.",
     casualNeedsSeat: "Confirm each day you want to ride — your seat isn't held.",
     daysRidden: (n) => `${n} days`,
     perDay: " / day",
-    splitAmong: (n) => `split among ${n} regulars`,
+    splitAmong: (n) => `split among ${n} subscribers`,
+    totalCost: "Total cost for the period",
+    totalCostHint: "Enter what the bus costs for the whole period. Each subscriber's share is worked out from it, and drops if someone new joins.",
+    shareNow: (each, n) => `${each} each right now · ${n} subscribers`,
+    casualCredit: (amt) => `less ${amt} from occasional riders`,
+    perPeriod: "per period",
+    shareChanges: "The share changes if the number of people changes.",
+
+    shareAutoStop: "Sharing stops on its own after an hour.",
+    shareStopped: "Sharing stopped on its own after an hour. Tap again if you're still driving.",
+    shareTimeLeft: (m) => `${m} min left`,
+
+    dropoffStop: "Drop-off stop", sameAsPickup: "Same as pickup",
+    pickupStop: "Pickup stop",
+    dropoffHint: "Leave it as \"same as pickup\" unless you get off somewhere else on the way back.",
 
     paymentLink: "Payment link", payNow: "Pay",
     paymentLinkHint: "An InstaPay or wallet link. The app can't confirm money arrived — you still tick \"paid\" yourself.",
@@ -1083,6 +1113,7 @@ function shareLink() {
 const CONFIG = {
   appName: "",  // بييجي من i18n
   locationPushMs: 10000,   // كل كام ملي ثانية نبعت مكان السواق
+  shareMaxMs: 60 * 60 * 1000,  // المشاركة بتقف لوحدها بعد ساعة
   staleAfterSec: 60,       // بعد كام ثانية نعتبر المكان قديم
   cutoffHourGo: 22,        // آخر ميعاد للتغيير قبل الرايحة (تنبيه بس)
   defaultCenter: [30.0444, 31.2357],
@@ -1862,14 +1893,22 @@ function notesBlock(shell) {
 }
 
 // العنصر المميز: خط السير بالمحطات والركاب على كل محطة
+// في الرايحة بنتجمّع على محطة الركوب، وفي الرجعة على محطة النزول
+function stopFor(rider) {
+  if (direction === "back") return rider.dropoff_point_id || rider.pickup_point_id;
+  return rider.pickup_point_id;
+}
+
 function routeStrip() {
   const riders = activeRiders();
-  const buckets = state.points.map((p) => ({
+  // الباص راجع بالعكس، فترتيب المحطات بيتقلب
+  const order = direction === "back" ? [...state.points].reverse() : state.points;
+  const buckets = order.map((p) => ({
     point: p,
-    people: riders.filter((r) => r.pickup_point_id === p.id),
+    people: riders.filter((r) => stopFor(r) === p.id),
   }));
   const orphans = riders.filter(
-    (r) => !state.points.some((p) => p.id === r.pickup_point_id)
+    (r) => !state.points.some((p) => p.id === stopFor(r))
   );
   if (orphans.length) buckets.push({ point: { name: t("noStop"), seq: "—" }, people: orphans });
 
@@ -1927,7 +1966,7 @@ return {render, destroy};
 
 /* ===== track.js ===== */
 const __mod_track = (function () {
-const {sb, state, el, clear, toast, errText, CONFIG, canDrive,
+const {sb, state, el, clear, toast, errText, CONFIG, isDriver,
   agoText, secondsSince, distanceM, prettyDistance, memberName,} = __mod_core;
 const {createMap} = __mod_map;
 const {t} = __mod_i18n;
@@ -1940,7 +1979,10 @@ let myPos = null;
 let busLoc = null;
 
 // حالة مشاركة السواق
-const share = { on: false, watchId: null, wakeLock: null, lastPush: 0, last: null };
+const share = {
+  on: false, watchId: null, wakeLock: null, lastPush: 0, last: null,
+  stopTimer: null, tickTimer: null, endsAt: 0,
+};
 
 async function render(root) {
   clear(root);
@@ -1957,7 +1999,7 @@ async function render(root) {
     el("button", { class: "btn btn--ghost btn--sm", type: "button", text: t("followBus"), onclick: () => mapApi.recenterOnBus() })
   );
 
-  if (canDrive()) actions.prepend(driverToggle(status));
+  if (isDriver()) actions.prepend(driverToggle(status));
 
   watchMe();
   await pullBus();
@@ -2037,7 +2079,12 @@ function paintStatus(box) {
 function driverToggle(statusBox) {
   const btn = el("button", { class: "btn btn--primary btn--sm", type: "button" });
   const sync = () => {
-    btn.textContent = share.on ? t("stopShare") : t("startShare");
+    if (share.on && share.endsAt) {
+      const mins = Math.max(0, Math.ceil((share.endsAt - Date.now()) / 60000));
+      btn.textContent = `${t("stopShare")} · ${t("shareTimeLeft", mins)}`;
+    } else {
+      btn.textContent = share.on ? t("stopShare") : t("startShare");
+    }
     btn.classList.toggle("btn--danger", share.on);
     btn.classList.toggle("btn--primary", !share.on);
   };
@@ -2046,6 +2093,9 @@ function driverToggle(statusBox) {
     sync();
   });
   sync();
+  share.syncBtn = sync;
+  clearInterval(share.tickTimer);
+  share.tickTimer = setInterval(() => { if (share.on) sync(); }, 30000);
   return btn;
 }
 
@@ -2089,16 +2139,18 @@ async function push(pos) {
   if (error) console.warn("location push failed:", error.message);
 }
 
-async function stopShare() {
+async function stopShare({ auto = false } = {}) {
   if (share.watchId !== null) navigator.geolocation.clearWatch(share.watchId);
   share.watchId = null;
   share.on = false;
+  share.endsAt = 0;
+  clearTimeout(share.stopTimer); share.stopTimer = null;
   document.removeEventListener("visibilitychange", onVisible);
   releaseWakeLock();
   await sb.from("driver_locations")
     .update({ is_sharing: false, updated_at: new Date().toISOString() })
     .eq("driver_id", state.profile.id);
-  toast(t("shareOff"), "ok");
+  toast(auto ? t("shareStopped") : t("shareOff"), auto ? "bad" : "ok");
 }
 
 async function requestWakeLock() {
@@ -2170,10 +2222,36 @@ function daysIn(userId, period) {
   return set.size;
 }
 
+// إجمالي اللي دفعه/عليه اللي بالمرة في الفترة — ده بيقلّل حمل المشتركين
+function casualTotal(period) {
+  return activeRiders()
+    .filter(isCasual)
+    .reduce((sum, m) => sum + daysIn(m.id, period) * dayRate(), 0);
+}
+
+// نصيب المشترك الواحد = (إجمالي الفترة − اللي جه من اللي بالمرة) ÷ عدد المشتركين
+// بيتحسب وقت العرض، فلو حد جديد دخل النصيب بيقل لوحده
+function shareOf(period) {
+  const subs = primaryCount();
+  if (!subs) return 0;
+  const total = period.total_amount != null
+    ? Number(period.total_amount)
+    : Number(period.amount || 0) * subs;   // فترات قديمة
+  const net = Math.max(0, total - casualTotal(period));
+  return Math.round((net / subs) * 100) / 100;
+}
+
 // اللي على الراكب في الفترة دي
 function owed(member, period) {
   if (isCasual(member)) return daysIn(member.id, period) * dayRate();
-  return Number(period.amount || 0);
+  return shareOf(period);
+}
+
+function periodTotal(period) {
+  const subs = primaryCount();
+  return period.total_amount != null
+    ? Number(period.total_amount)
+    : Number(period.amount || 0) * subs;
 }
 
 const money = (x) => (Math.round(x * 100) % 100 === 0 ? Number(x).toFixed(0) : Number(x).toFixed(2));
@@ -2226,7 +2304,7 @@ function paint(shell) {
           el("p", { class: "hint mono", text: `${shortDate(p.start_date)} — ${shortDate(p.end_date)}` }),
           days !== null
             ? el("p", { class: "hint mono", text: `${t("daysRidden", days)} × ${money(dayRate())} ${t("currency")}` })
-            : null
+            : el("p", { class: "hint", text: t("splitAmong", primaryCount()) })
         ),
         el("div", { class: "pay__right" },
           el("span", { class: "mono amount", text: `${money(amt)} ${t("currency")}` }),
@@ -2268,7 +2346,11 @@ function paint(shell) {
       el("div", { class: "card__head" },
         el("div", {},
           el("h3", { class: "card__title", text: p.label }),
-          el("p", { class: "hint mono", text: `${shortDate(p.start_date)} — ${shortDate(p.end_date)} · ${Number(p.amount).toFixed(0)} ${t("currency")}${t("perPerson")}` })
+          el("p", { class: "hint mono", text: `${shortDate(p.start_date)} — ${shortDate(p.end_date)} · ${money(periodTotal(p))} ${t("currency")} ${t("perPeriod")}` }),
+          el("p", { class: "hint", text: t("shareNow", `${money(shareOf(p))} ${t("currency")}`, primaryCount()) }),
+          casualTotal(p) > 0
+            ? el("p", { class: "hint hint--calc", text: t("casualCredit", `${money(casualTotal(p))} ${t("currency")}`) })
+            : null
         ),
         el("span", { class: "mono tally", text: `${money(collected)} / ${money(target)} ${t("currency")}` })
       ),
@@ -2333,7 +2415,6 @@ function newPeriodCard(shell) {
     { key: "month", days: 30, label: () => t("quickMonth"), name: (d) => t("monthOf", d) },
   ];
   let preset = PRESETS[0];
-  let mode = "each";
 
   const endISO = () => shift(startISO, preset.days - 1);
 
@@ -2368,40 +2449,24 @@ function newPeriodCard(shell) {
       onclick: () => { startISO = shift(startISO, days); drawRange(); autoName(); },
     });
 
-  // ---- المبلغ ----
+  // ---- المبلغ: إجمالي الفترة، والنصيب بيتحسب ----
   const amount = el("input", {
     class: "input input--sm mono", type: "number", min: "0", step: "1",
     inputmode: "decimal", placeholder: "0",
   });
   const preview = el("p", { class: "hint hint--calc" });
-  const perPerson = () => {
-    const v = Number(amount.value || 0);
-    if (!v || !n) return 0;
-    return mode === "total" ? Math.round((v / n) * 100) / 100 : v;
-  };
-  const fmt = (x) => (Math.round(x * 100) % 100 === 0 ? x.toFixed(0) : x.toFixed(2));
+
   function refresh() {
     if (!n) { preview.textContent = t("noRiders"); return; }
     const v = Number(amount.value || 0);
     if (!v) { preview.textContent = ""; return; }
-    preview.textContent = mode === "total"
-      ? t("eachOf", `${fmt(perPerson())} ${t("currency")}`, n)
-      : t("totalOf", `${fmt(v * n)} ${t("currency")}`, n);
+    const each = Math.round((v / n) * 100) / 100;
+    preview.textContent = t("shareNow", `${fmt(each)} ${t("currency")}`, n);
   }
   amount.addEventListener("input", refresh);
+  const fmt = (x) => (Math.round(x * 100) % 100 === 0 ? Number(x).toFixed(0) : Number(x).toFixed(2));
 
-  const segs = el("div", { class: "segs" });
-  const drawSegs = () => {
-    clear(segs);
-    [["each", t("modePerPerson")], ["total", t("modeTotal")]].forEach(([k, txt]) => {
-      segs.append(el("button", {
-        class: `seg ${mode === k ? "is-on" : ""}`, type: "button", text: txt,
-        onclick: () => { mode = k; drawSegs(); refresh(); },
-      }));
-    });
-  };
-
-  drawChips(); drawRange(); autoName(); drawSegs();
+  drawChips(); drawRange(); autoName(); refresh();
 
   return el("section", { class: "card" },
     el("h3", { class: "card__title", text: t("newPeriod") }),
@@ -2417,11 +2482,11 @@ function newPeriodCard(shell) {
     ),
 
     el("div", { class: "field field--tight" },
-      el("div", { class: "field__row" },
-        el("span", { class: "field__label", text: t("amountField") }), segs),
+      el("span", { class: "field__label", text: t("totalCost") }),
       el("div", { class: "suffixed" },
         amount, el("span", { class: "suffixed__unit mono", text: t("currency") })),
-      preview
+      preview,
+      el("p", { class: "hint", text: t("totalCostHint") })
     ),
 
     el("button", {
@@ -2431,11 +2496,13 @@ function newPeriodCard(shell) {
         const eISO = endISO();
         if (!label.value.trim()) return toast(t("needLabel"), "bad");
         if (new Date(eISO) < new Date(sISO)) return toast(t("badDates"), "bad");
+        const total = Number(amount.value || 0);
         const { error } = await sb.from("payment_periods").insert({
           label: label.value.trim(),
           start_date: sISO,
           end_date: eISO,
-          amount: perPerson(),
+          total_amount: total,
+          amount: n ? Math.round((total / n) * 100) / 100 : 0,  // للتوافق مع القديم
         });
         if (error) return toast(errText(error), "bad");
         toast(t("periodCreated"), "ok");
@@ -2729,6 +2796,14 @@ function membersCard(shell) {
       update(shell, m.id, { pickup_point_id: pointSel.value ? Number(pointSel.value) : null })
     );
 
+    const dropSel = el("select", { class: "select", "aria-label": t("dropoffStop") },
+      el("option", { value: "", selected: !m.dropoff_point_id }, t("sameAsPickup")),
+      ...state.points.map((p) => el("option", { value: String(p.id), selected: m.dropoff_point_id === p.id }, p.name))
+    );
+    dropSel.addEventListener("change", () =>
+      update(shell, m.id, { dropoff_point_id: dropSel.value ? Number(dropSel.value) : null })
+    );
+
     const typeSel = el("select", { class: "select", "aria-label": t("memberType") },
       ...[["primary", t("typePrimary")], ["casual", t("typeCasual")]].map(([v, lbl]) =>
         el("option", { value: v, selected: (m.member_type || "primary") === v }, lbl))
@@ -2746,7 +2821,7 @@ function membersCard(shell) {
         el("p", { class: "row__name", text: m.full_name || "—" }),
         el("p", { class: "row__sub mono", text: m.phone || "" })
       ),
-      el("div", { class: "row__controls" }, roleSel, typeSel, pointSel, activeBtn,
+      el("div", { class: "row__controls" }, roleSel, typeSel, pointSel, dropSel, activeBtn,
         el("button", {
           class: "btn btn--ghost btn--sm btn--danger", type: "button", text: t("revoke"),
           onclick: () => decide(shell, m.id, "revoke"),
@@ -2881,6 +2956,10 @@ function paint(shell) {
     el("option", { value: "", selected: !me.pickup_point_id }, t("pickMyStop")),
     ...state.points.map((p) => el("option", { value: String(p.id), selected: me.pickup_point_id === p.id }, p.name))
   );
+  const drop = el("select", { class: "select select--block" },
+    el("option", { value: "", selected: !me.dropoff_point_id }, t("sameAsPickup")),
+    ...state.points.map((p) => el("option", { value: String(p.id), selected: me.dropoff_point_id === p.id }, p.name))
+  );
 
   shell.append(
     el("header", { class: "head" },
@@ -2893,8 +2972,9 @@ function paint(shell) {
       el("h3", { class: "card__title", text: t("myInfo") }),
       el("label", { class: "field" }, el("span", { class: "field__label", text: t("fName") }), name),
       el("label", { class: "field" }, el("span", { class: "field__label", text: t("phone") }), phone),
-      el("label", { class: "field" }, el("span", { class: "field__label", text: t("myStop") }), point),
-      el("p", { class: "hint", text: t("currently") + pointName(me.pickup_point_id) }),
+      el("label", { class: "field" }, el("span", { class: "field__label", text: t("pickupStop") }), point),
+      el("label", { class: "field" }, el("span", { class: "field__label", text: t("dropoffStop") }), drop),
+      el("p", { class: "hint", text: t("dropoffHint") }),
       el("button", {
         class: "btn btn--primary btn--block btn--sm", type: "button", text: t("save"),
         onclick: async () => {
@@ -2902,6 +2982,7 @@ function paint(shell) {
             full_name: name.value.trim(),
             phone: phone.value.trim() || null,
             pickup_point_id: point.value ? Number(point.value) : null,
+            dropoff_point_id: drop.value ? Number(drop.value) : null,
           };
           if (!patch.full_name) return toast(t("nameRequired"), "bad");
           const { error } = await sb.from("profiles").update(patch).eq("id", me.id);
