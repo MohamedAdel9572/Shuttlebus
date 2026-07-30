@@ -610,6 +610,56 @@ html[lang="en"] .strip__title { letter-spacing: -.015em; }
   border-radius: 10px; padding: 9px 12px; color: var(--clay);
 }
 
+/* ---------- رقمين جنب بعض ---------- */
+.split { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.splitnum { margin: 2px 0 0; font-size: 1.3rem; }
+.splitnum--ok { color: var(--mint); }
+.splitnum--due { color: var(--clay); }
+
+/* ---------- أقسام الركوب والنزول ---------- */
+
+.leg { margin-bottom: 4px; }
+.leg__title {
+  margin: 14px 0 10px;
+  font-size: .78rem; font-weight: 600; letter-spacing: .06em;
+  color: var(--amber); text-transform: uppercase;
+}
+.leg:first-child .leg__title { margin-top: 0; }
+
+/* ---------- شريط الرحلة شغالة ---------- */
+
+.banner--live {
+  display: flex; align-items: center; gap: 10px;
+  text-decoration: none;
+  background: #17342a; border-color: #275544; color: var(--mint);
+}
+.banner--live .pill__dot {
+  width: 8px; height: 8px; border-radius: 50%; background: currentColor; flex: none;
+  animation: pulse 1.4s ease-in-out infinite;
+}
+.banner__go {
+  margin-inline-start: auto; color: var(--dim);
+  font-size: .78rem; text-decoration: underline; white-space: nowrap;
+}
+
+/* ---------- صفوف الإدارة: عناصر متحكمة مالهاش تخرج بره الشاشة ---------- */
+
+.ctls { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; }
+.ctl { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.ctl__label { font-size: .7rem; color: var(--dim); letter-spacing: .02em; }
+.ctl .select { width: 100%; min-width: 0; }
+
+.row__head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.dirty { font-size: .7rem; color: var(--amber); white-space: nowrap; }
+
+/* الـ select مايتمددش بره الكارت مهما كان اسم المحطة طويل */
+.select {
+  max-width: 100%;
+  text-overflow: ellipsis;
+}
+.row__controls { flex-wrap: wrap; }
+.row__controls .select { min-width: 0; max-width: 100%; }
+
 </style>
 </head>
 <body>
@@ -794,6 +844,25 @@ const DICT = {
     pickAStop: "— اختار —",
     tripsHint: "حدّد محطتك في كل رحلة. اللي سايبه «وجهة المجموعة» معناه المكان اللي الكل رايحه.",
     noDestinationYet: "الأدمن لسه محددش وجهة للمجموعة.",
+
+    // السواق والفلوس
+    driverEarnings: "مستحقاتك", forPeriod: "عن الفترة",
+    collectedSoFar: "اتحصّل", stillOut: "لسه مطلوب",
+    driverMoneyHint: "دي الفلوس اللي المفروض تاخدها عن كل فترة، واللي اتحصّل منها لحد دلوقتي.",
+
+    // الحفظ
+    saveChanges: "احفظ", unsaved: "فيه تعديلات مش متحفظة",
+    nothingChanged: "مفيش حاجة اتغيّرت.",
+
+    // خط السير
+    sectionPickup: "الركوب", sectionDropoff: "النزول",
+    notSetYet: "لسه محددش محطته",
+    notSetHint: "دول لازم يحدّدوا محطتهم من «حسابي» — من غيرها السواق مش هيعرف ياخدهم منين.",
+
+    // الرحلة شغالة
+    tripStarted: "الرحلة بدأت — الباص في الطريق",
+    tripStartedAt: (time) => `الرحلة بدأت ${time}`,
+    openMap: "شوف الخريطة",
     startHint: "المكان اللي الباص بيتحرّك منه. مالهاش ركاب — بتظهر بس في أول خط السير.",
     driverNoStop: "السواق مالوش محطة — هو اللي بيمر عليها كلها.",
     subsPriority: "المشتركين ليهم مكان محجوز. اللي بالمرة بياخد من الفاضل بعدهم.",
@@ -1018,6 +1087,21 @@ const DICT = {
     pickAStop: "— pick one —",
     tripsHint: "Set your stop for each trip. Anything left on \"group destination\" means the place everyone goes.",
     noDestinationYet: "The admin hasn't set a group destination yet.",
+
+    driverEarnings: "Your earnings", forPeriod: "for the period",
+    collectedSoFar: "collected", stillOut: "still owed",
+    driverMoneyHint: "What you're due for each period, and how much has come in so far.",
+
+    saveChanges: "Save", unsaved: "Unsaved changes",
+    nothingChanged: "Nothing changed.",
+
+    sectionPickup: "Pickups", sectionDropoff: "Drop-offs",
+    notSetYet: "No stop set yet",
+    notSetHint: "These people need to set their stop in Account — without it the driver won't know where to collect them.",
+
+    tripStarted: "Trip started — the bus is on its way",
+    tripStartedAt: (time) => `Trip started ${time}`,
+    openMap: "Open the map",
     startHint: "Where the bus sets off from. No riders — it just shows at the top of the route.",
     driverNoStop: "The driver has no stop — they pass through all of them.",
     subsPriority: "Subscribers have a held seat. Occasional riders take whatever's left after them.",
@@ -1779,6 +1863,7 @@ const {sb, state, el, clear, toast, errText, todayISO, prettyDate, clockTime,
   activeRiders, isCasual, stopOf, destinationPoint,} = __mod_core;
 const {t} = __mod_i18n;
 let channel = null;
+let bus = null;
 let direction = "go";
 let serviceDate = todayISO();
 let attendance = [];
@@ -1809,10 +1894,27 @@ function subscribe(shell) {
       await loadData();
       paint(shell);
     })
+    // الرحلة بدأت أو وقفت — بيوصل لوحده من غير refresh
+    .on("postgres_changes", { event: "*", schema: "public", table: "driver_locations" }, (payload) => {
+      const row = payload.new;
+      if (!row) return;
+      bus = row.is_sharing ? row : null;
+      paint(shell);
+    })
     .subscribe();
 }
 
+async function loadBus() {
+  const { data } = await sb.from("driver_locations")
+    .select("driver_id, is_sharing, updated_at")
+    .eq("is_sharing", true)
+    .order("updated_at", { ascending: false })
+    .limit(1);
+  bus = data && data[0] ? data[0] : null;
+}
+
 async function loadData() {
+  await loadBus();
   const [att, nt] = await Promise.all([
     sb.from("attendance").select("*").eq("service_date", serviceDate),
     sb.from("notes").select("*").gt("expires_at", new Date().toISOString()).order("created_at", { ascending: false }).limit(10),
@@ -1881,6 +1983,8 @@ function paint(shell) {
   clear(shell);
   shell.append(header());
   shell.append(dirTabs(shell));
+  const live = tripBanner();
+  if (live) shell.append(live);
   const warn = fullBanner();
   if (warn) shell.append(warn);
   if (canDrive()) shell.append(noteComposer(shell));
@@ -1940,6 +2044,16 @@ function header() {
       el("span", { class: "count__of", text: `/ ${denom}` }),
       cap ? el("span", { class: "count__unit", text: t("seats") }) : null
     )
+  );
+}
+
+// الرحلة شغالة دلوقتي — بيظهر لوحده لحظة ما السواق يبدأ
+function tripBanner() {
+  if (!bus) return null;
+  return el("a", { class: "banner banner--live", href: "#/map" },
+    el("span", { class: "pill__dot" }),
+    el("span", { text: t("tripStartedAt", clockTime(bus.updated_at)) }),
+    el("span", { class: "banner__go", text: t("openMap") })
   );
 }
 
@@ -2044,22 +2158,9 @@ function routeStrip() {
   const start = state.points.find((p) => p.is_start);
   const dest = destinationPoint();
   const stops = state.points.filter((p) => !p.is_start && !p.is_destination);
-  // الباص راجع بالعكس، فترتيب المحطات بيتقلب
-  const order = direction === "back" ? [...stops].reverse() : stops;
-  const buckets = order.map((p) => ({
-    point: p,
-    people: riders.filter((r) => stopFor(r) === p.id),
-  }));
-  const orphans = riders.filter(
-    (r) => !state.points.some((p) => p.id === stopFor(r))
-  );
-  if (orphans.length) buckets.push({ point: { name: t("noStop"), seq: "—" }, people: orphans });
 
-  const strip = el("section", { class: "strip" },
-    el("h3", { class: "strip__title", text: t("route") })
-  );
+  const strip = el("section", { class: "strip" });
 
-  // عقدة ثابتة من غير ركاب — بداية أو وجهة
   const anchor = (point, labelKey) =>
     el("div", { class: "stop stop--start" },
       el("div", { class: "stop__marker stop__marker--start" }, "◆"),
@@ -2071,42 +2172,71 @@ function routeStrip() {
       )
     );
 
-  // الرايحة: البداية فوق. الرجعة: الوجهة فوق (الباص بيتحرّك من الشغل)
-  if (direction === "go" && start) strip.append(anchor(start, "isStart"));
-  if (direction === "back" && dest) strip.append(anchor(dest, "isDestination"));
-
-  buckets.forEach(({ point, people }) => {
+  const stopNode = (point, people) => {
     const onboard = people.filter((p) => statusOf(p.id) === "in").length;
-    strip.append(
-      el("div", { class: `stop ${onboard === 0 ? "is-empty" : ""}` },
-        el("div", { class: "stop__marker" }, String(point.seq ?? "—")),
-        el("div", { class: "stop__body" },
-          el("div", { class: "stop__head" },
-            el("h4", { class: "stop__name", text: point.name }),
-            el("span", { class: "stop__count", text: `${onboard}/${people.length}` })
-          ),
-          people.length
-            ? el("ul", { class: "chips" },
-                ...people.map((p) => {
-                  const st = statusOf(p.id);
-                  const r = rowOf(p.id);
-                  return el("li", {
-                    class: `chip chip--${st} ${p.id === state.profile.id ? "is-me" : ""} ${isCasual(p) ? "is-casual" : ""}`,
-                    title: r?.note || "",
-                  },
-                    el("span", { class: "chip__name", text: p.full_name || "—" }),
-                    r?.note ? el("span", { class: "chip__note", text: r.note }) : null
-                  );
-                })
-              )
-            : el("p", { class: "hint", text: t("noOneHere") })
-        )
+    return el("div", { class: `stop ${onboard === 0 ? "is-empty" : ""}` },
+      el("div", { class: "stop__marker" }, String(point.seq ?? "—")),
+      el("div", { class: "stop__body" },
+        el("div", { class: "stop__head" },
+          el("h4", { class: "stop__name", text: point.name }),
+          el("span", { class: "stop__count", text: `${onboard}/${people.length}` })
+        ),
+        people.length
+          ? el("ul", { class: "chips" }, ...people.map((p) => {
+              const st = statusOf(p.id);
+              const r = rowOf(p.id);
+              return el("li", {
+                class: `chip chip--${st} ${p.id === state.profile.id ? "is-me" : ""} ${isCasual(p) ? "is-casual" : ""}`,
+                title: r?.note || "",
+              },
+                el("span", { class: "chip__name", text: p.full_name || "—" }),
+                r?.note ? el("span", { class: "chip__note", text: r.note }) : null
+              );
+            }))
+          : el("p", { class: "hint", text: t("noOneHere") })
       )
     );
-  });
+  };
 
-  // الرايحة بتخلص عند الوجهة
-  if (direction === "go" && dest) strip.append(anchor(dest, "isDestination"));
+  // قسم كامل: عنوان + محطات مرتّبة + الناس عليها
+  const section = (titleKey, trip, reverse, anchorTop, anchorBottom) => {
+    const box = el("div", { class: "leg" },
+      el("h4", { class: "leg__title", text: t(titleKey) })
+    );
+    if (anchorTop) box.append(anchor(anchorTop[0], anchorTop[1]));
+
+    const order = reverse ? [...stops].reverse() : stops;
+    order.forEach((sp) => {
+      const people = riders.filter((r) => stopOf(r, trip) === sp.id);
+      if (!people.length) return;                 // مانعرضش محطة مالهاش حد
+      box.append(stopNode(sp, people));
+    });
+
+    if (anchorBottom) box.append(anchor(anchorBottom[0], anchorBottom[1]));
+    return box;
+  };
+
+  if (direction === "go") {
+    strip.append(section("sectionPickup", "morningPickup", false,
+      start ? [start, "isStart"] : null, null));
+    strip.append(section("sectionDropoff", "morningDropoff", false,
+      null, dest ? [dest, "isDestination"] : null));
+  } else {
+    strip.append(section("sectionPickup", "eveningPickup", false,
+      dest ? [dest, "isDestination"] : null, null));
+    strip.append(section("sectionDropoff", "eveningDropoff", true, null, null));
+  }
+
+  // (4) اللي لسه محددش محطته — لازم يبانوا عشان حد يفكّرهم
+  const lost = riders.filter((r) => !stopOf(r, direction === "back" ? "eveningDropoff" : "morningPickup"));
+  if (lost.length) {
+    strip.append(el("div", { class: "card card--note" },
+      el("h3", { class: "card__title", text: `${t("notSetYet")} · ${lost.length}` }),
+      el("ul", { class: "chips" }, ...lost.map((p) =>
+        el("li", { class: "chip" }, p.full_name || "—"))),
+      el("p", { class: "hint", text: t("notSetHint") })
+    ));
+  }
 
   if (canDrive()) {
     const out = riders.filter((r) => statusOf(r.id) === "out");
@@ -2337,7 +2467,7 @@ return {render, destroy, sharing};
 /* ===== money.js ===== */
 const __mod_money = (function () {
 const {sb, state, el, clear, toast, errText, isAdmin, shortDate, todayISO,
-  riderCount, activeRiders, primaryCount, isCasual, dayRate, paymentUrl, paymentNote,} = __mod_core;
+  riderCount, activeRiders, primaryCount, isCasual, dayRate, paymentUrl, paymentNote, isDriver,} = __mod_core;
 const {t} = __mod_i18n;
 let periods = [];
 let payments = [];
@@ -2427,7 +2557,7 @@ function paint(shell) {
   shell.append(el("header", { class: "head" },
     el("div", {},
       el("p", { class: "head__eyebrow", text: t("money") }),
-      el("h2", { class: "head__title", text: isAdmin() ? t("collection") : t("whatIOwe") })
+      el("h2", { class: "head__title", text: isDriver() ? t("driverEarnings") : (isAdmin() ? t("collection") : t("whatIOwe")) })
     )
   ));
 
@@ -2443,6 +2573,41 @@ function paint(shell) {
 
   if (!periods.length) {
     shell.append(el("p", { class: "empty", text: isAdmin() ? t("noPeriodsAdmin") : t("noPeriods") }));
+    return;
+  }
+
+  // السواق بياخد فلوس، مش بيدفع
+  if (isDriver()) {
+    if (!periods.length) {
+      shell.append(el("p", { class: "empty", text: t("noPeriods") }));
+      return;
+    }
+    shell.append(el("p", { class: "hint", text: t("driverMoneyHint") }));
+    periods.forEach((p) => {
+      const riders = activeRiders();
+      const target = riders.reduce((sum, r) => sum + owed(r, p), 0);
+      const got = riders.filter((r) => payRow(p.id, r.id)?.paid)
+        .reduce((sum, r) => sum + owed(r, p), 0);
+      shell.append(el("section", { class: "card" },
+        el("div", { class: "card__head" },
+          el("div", {},
+            el("h3", { class: "card__title", text: p.label }),
+            el("p", { class: "hint mono", text: `${shortDate(p.start_date)} — ${shortDate(p.end_date)}` })
+          ),
+          el("span", { class: "mono amount", text: `${money(target)} ${t("currency")}` })
+        ),
+        el("div", { class: "split" },
+          el("div", {},
+            el("p", { class: "card__label", text: t("collectedSoFar") }),
+            el("p", { class: "mono splitnum splitnum--ok", text: money(got) })
+          ),
+          el("div", {},
+            el("p", { class: "card__label", text: t("stillOut") }),
+            el("p", { class: "mono splitnum splitnum--due", text: money(target - got) })
+          )
+        )
+      ));
+    });
     return;
   }
 
@@ -2761,25 +2926,39 @@ function capacityCard(shell) {
     await reload(shell);
   };
 
-  capInput.addEventListener("change", () => {
-    const v = capInput.value.trim();
-    save({ bus_capacity: v ? Number(v) : null });
-  });
 
-  const seg = (val, text) =>
-    el("button", {
-      class: `seg ${autoIn === val ? "is-on" : ""}`, type: "button",
-      onclick: () => { if (autoIn !== val) save({ default_in: val }); },
-    }, text);
+
+  let pickedMode = autoIn;
+  const segs = el("div", { class: "segs" });
+  const drawSegs = () => {
+    clear(segs);
+    [[true, t("defaultInLbl")], [false, t("defaultOutLbl")]].forEach(([val, text]) => {
+      segs.append(el("button", {
+        class: `seg ${pickedMode === val ? "is-on" : ""}`, type: "button", text,
+        onclick: () => { pickedMode = val; drawSegs(); },
+      }));
+    });
+  };
+  drawSegs();
+
+  const saveBtn = el("button", {
+    class: "btn btn--primary btn--block btn--sm", type: "button", text: t("saveChanges"),
+    onclick: () => {
+      const c = capInput.value.trim();
+      const r = rateInput.value.trim();
+      save({
+        bus_capacity: c ? Number(c) : null,
+        day_rate: r ? Number(r) : null,
+        default_in: pickedMode,
+      });
+    },
+  });
 
   const rateInput = el("input", {
     class: "input input--sm mono", type: "number", min: "0", step: "1", inputmode: "decimal",
     placeholder: "0", value: state.settings?.day_rate != null ? String(state.settings.day_rate) : "",
   });
-  rateInput.addEventListener("change", () => {
-    const v = rateInput.value.trim();
-    save({ day_rate: v ? Number(v) : null });
-  });
+
 
   const tooSmall = cap && n > cap;
 
@@ -2796,7 +2975,7 @@ function capacityCard(shell) {
 
     el("div", { class: "field__row" },
       el("span", { class: "field__label", text: t("defaultMode") }),
-      el("div", { class: "segs" }, seg(true, t("defaultInLbl")), seg(false, t("defaultOutLbl")))
+      segs
     ),
     el("p", { class: "hint", text: t("defaultModeHint") }),
     tooSmall && autoIn
@@ -2831,18 +3010,13 @@ function paymentCard(shell) {
     placeholder: "https://ipn.eg/…   |   name@instapay",
     value: state.settings?.payment_url || "",
   });
-  payInput.addEventListener("change", () => {
-    const v = payInput.value.trim();
-    if (v && /^http:\/\//i.test(v)) return toast(t("badPayUrl"), "bad");
-    save({ payment_url: v || null });
-  });
+
 
   const payNoteInput = el("input", {
     class: "input input--sm", type: "text", maxlength: "80",
     placeholder: t("paymentNotePh"), value: state.settings?.payment_note || "",
   });
-  payNoteInput.addEventListener("change", () =>
-    save({ payment_note: payNoteInput.value.trim() || null }));
+
 
   return el("section", { class: "card" },
     el("h3", { class: "card__title", text: t("paymentLink") }),
@@ -2850,7 +3024,252 @@ function paymentCard(shell) {
     el("label", { class: "field field--tight" },
       el("span", { class: "field__label", text: t("paymentLink") }), payInput),
     el("label", { class: "field field--tight" },
-      el("span", { class: "field__label", text: t("paymentNote") }), payNoteInput)
+      el("span", { class: "field__label", text: t("paymentNote") }), payNoteInput),
+    el("button", {
+      class: "btn btn--primary btn--block btn--sm", type: "button", text: t("saveChanges"),
+      onclick: () => {
+        const v = payInput.value.trim();
+        if (v && /^http:\/\//i.test(v)) return toast(t("badPayUrl"), "bad");
+        save({ payment_url: v || null, payment_note: payNoteInput.value.trim() || null });
+      },
+    })
+  );
+}
+
+// الطلبات المستنية موافقة — أهم حاجة في الشاشة فبتيجي فوق
+function requestsCard(shell) {
+  const pending = state.members.filter((m) => !m.is_approved && !m.is_rejected);
+  const list = el("div", { class: "rows" });
+
+  pending.forEach((m) => {
+    list.append(el("div", { class: "row" },
+      el("div", { class: "row__main" },
+        el("p", { class: "row__name", text: m.full_name || "—" }),
+        el("p", { class: "row__sub mono", text: m.phone || "" })
+      ),
+      el("div", { class: "row__controls" },
+        el("button", {
+          class: "btn btn--primary btn--sm", type: "button", text: t("approve"),
+          onclick: () => decide(shell, m.id, "approve"),
+        }),
+        el("button", {
+          class: "btn btn--ghost btn--sm btn--danger", type: "button", text: t("reject"),
+          onclick: () => decide(shell, m.id, "reject"),
+        })
+      )
+    ));
+  });
+
+  return el("section", { class: `card ${pending.length ? "card--note" : ""}` },
+    el("div", { class: "card__head" },
+      el("h3", { class: "card__title", text: t("requests") }),
+      pending.length
+        ? el("span", { class: "count" },
+            el("span", { class: "count__num", text: String(pending.length) }))
+        : null
+    ),
+    pending.length
+      ? el("p", { class: "hint", text: t("requestsHint") })
+      : el("p", { class: "hint", text: t("noRequests") }),
+    pending.length ? list : null
+  );
+}
+
+// قرار واحد لكل الحالات: قبول / رفض / إلغاء قبول / إرجاع
+async function decide(shell, id, action) {
+  const who = state.members.find((m) => m.id === id);
+  const name = who?.full_name || "";
+
+  const plans = {
+    approve: { patch: { is_approved: true,  is_rejected: false }, done: "approvedToast" },
+    reject:  { patch: { is_approved: false, is_rejected: true  }, done: "rejectedToast", ask: "confirmReject" },
+    revoke:  { patch: { is_approved: false, is_rejected: false }, done: "revokedToast",  ask: "confirmRevoke" },
+    restore: { patch: { is_approved: false, is_rejected: false }, done: "restoredToast" },
+  };
+  const plan = plans[action];
+  if (plan.ask && !confirm(`${t(plan.ask)} "${name}"?`)) return;
+
+  const { error } = await sb.from("profiles").update(plan.patch).eq("id", id);
+  if (error) return toast(errText(error), "bad");
+  toast(t(plan.done), "ok");
+  await reload(shell);
+}
+
+// المرفوضين — قسم صغير تحت، عشان الرفض مايبقاش طريق مقفول
+function rejectedCard(shell) {
+  const rejected = state.members.filter((m) => m.is_rejected);
+  if (!rejected.length) return null;
+
+  const list = el("div", { class: "rows" });
+  rejected.forEach((m) => {
+    list.append(el("div", { class: "row" },
+      el("div", { class: "row__main" },
+        el("p", { class: "row__name", text: m.full_name || "—" }),
+        el("p", { class: "row__sub mono", text: m.phone || "" })
+      ),
+      el("div", { class: "row__controls" },
+        el("button", {
+          class: "btn btn--ghost btn--sm", type: "button", text: t("restore"),
+          onclick: () => decide(shell, m.id, "restore"),
+        }),
+        el("button", {
+          class: "btn btn--ghost btn--sm btn--danger", type: "button", text: t("deleteUser"),
+          onclick: () => deleteUser(shell, m),
+        })
+      )
+    ));
+  });
+
+  return el("section", { class: "card" },
+    el("h3", { class: "card__title", text: t("rejectedSection") }),
+    el("p", { class: "hint", text: t("rejectedHint") }),
+    list
+  );
+}
+
+function membersCard(shell) {
+  const list = el("div", { class: "rows" });
+
+  state.members.filter((m) => m.is_approved && !m.is_rejected).forEach((m) => {
+    const draft = {};                       // التعديلات لحد ما يدوس احفظ
+    const saveBtn = el("button", {
+      class: "btn btn--primary btn--sm", type: "button", text: t("saveChanges"), disabled: true,
+    });
+    const dirty = el("span", { class: "dirty", text: t("unsaved") });
+    dirty.style.display = "none";
+
+    const touch = (key, val) => {
+      if (val === (m[key] ?? null)) delete draft[key];
+      else draft[key] = val;
+      const has = Object.keys(draft).length > 0;
+      saveBtn.disabled = !has;
+      dirty.style.display = has ? "" : "none";
+    };
+
+    saveBtn.addEventListener("click", async () => {
+      if (!Object.keys(draft).length) return toast(t("nothingChanged"), "bad");
+      saveBtn.disabled = true;
+      await update(shell, m.id, draft);
+    });
+
+    const roleSel = el("select", { class: "select", "aria-label": t("rolePassenger") },
+      ...ROLES().map(([v, label]) => el("option", { value: v, selected: m.role === v }, label))
+    );
+    roleSel.addEventListener("change", () => touch("role", roleSel.value));
+
+    const typeSel = el("select", { class: "select", "aria-label": t("memberType") },
+      ...[["primary", t("typePrimary")], ["casual", t("typeCasual")]].map(([v, lbl]) =>
+        el("option", { value: v, selected: (m.member_type || "primary") === v }, lbl))
+    );
+    typeSel.addEventListener("change", () => touch("member_type", typeSel.value));
+
+    const stopSel = (field, current) => {
+      const sel = el("select", { class: "select" },
+        el("option", { value: "", selected: !current }, t("pickStop")),
+        ...state.points.filter((p) => !p.is_start && !p.is_destination)
+          .map((p) => el("option", { value: String(p.id), selected: current === p.id }, p.name))
+      );
+      sel.addEventListener("change", () =>
+        touch(field, sel.value ? Number(sel.value) : null));
+      return sel;
+    };
+    const pickSel = stopSel("pickup_point_id", m.pickup_point_id);
+    const dropSel = stopSel("dropoff_point_id", m.dropoff_point_id);
+
+    const activeBtn = el("button", {
+      class: `pillbtn ${m.is_active ? "is-on" : ""}`, type: "button",
+      text: m.is_active ? t("activeLbl") : t("stopped"),
+    });
+    activeBtn.addEventListener("click", () => {
+      const next = !(draft.is_active ?? m.is_active);
+      touch("is_active", next);
+      activeBtn.classList.toggle("is-on", next);
+      activeBtn.textContent = next ? t("activeLbl") : t("stopped");
+    });
+
+    const labelled = (labelText, node) =>
+      el("label", { class: "ctl" },
+        el("span", { class: "ctl__label", text: labelText }), node);
+
+    list.append(el("div", { class: "row row--stack" },
+      el("div", { class: "row__head" },
+        el("p", { class: "row__name", text: m.full_name || "—" }),
+        dirty
+      ),
+      m.phone ? el("p", { class: "row__sub mono", text: m.phone }) : null,
+
+      el("div", { class: "ctls" },
+        labelled(t("memberType"), roleSel),
+        ...(m.role === "driver" ? [] : [
+          labelled(t("typePrimary") + " / " + t("typeCasual"), typeSel),
+          labelled(t("sectionPickup"), pickSel),
+          labelled(t("sectionDropoff"), dropSel),
+        ])
+      ),
+
+      el("div", { class: "row__controls" },
+        activeBtn,
+        saveBtn,
+        el("button", {
+          class: "btn btn--ghost btn--sm btn--danger", type: "button", text: t("revoke"),
+          onclick: () => decide(shell, m.id, "revoke"),
+        }),
+        m.id === state.profile.id ? null : el("button", {
+          class: "btn btn--ghost btn--sm btn--danger", type: "button", text: t("deleteUser"),
+          onclick: () => deleteUser(shell, m),
+        })
+      )
+    ));
+  });
+
+  return el("section", { class: "card" },
+    el("h3", { class: "card__title", text: t("members") }),
+    el("p", { class: "hint", text: t("membersHint") }),
+    el("p", { class: "hint", text: t("subsPriority") }),
+    el("p", { class: "hint", text: t("driverNoStop") }),
+    list
+  );
+}
+
+// الدفع — كارت لوحده عشان يبان
+function paymentCard(shell) {
+  const save = async (patch) => {
+    const { error } = await sb.from("group_settings")
+      .update({ ...patch, updated_at: new Date().toISOString() }).eq("id", 1);
+    if (error) return toast(errText(error), "bad");
+    toast(t("saved"), "ok");
+    await reload(shell);
+  };
+
+  const payInput = el("input", {
+    class: "input input--sm", type: "text", dir: "ltr",
+    autocapitalize: "off", autocorrect: "off", spellcheck: "false",
+    placeholder: "https://ipn.eg/…   |   name@instapay",
+    value: state.settings?.payment_url || "",
+  });
+
+
+  const payNoteInput = el("input", {
+    class: "input input--sm", type: "text", maxlength: "80",
+    placeholder: t("paymentNotePh"), value: state.settings?.payment_note || "",
+  });
+
+
+  return el("section", { class: "card" },
+    el("h3", { class: "card__title", text: t("paymentLink") }),
+    el("p", { class: "hint", text: t("paymentLinkHint") }),
+    el("label", { class: "field field--tight" },
+      el("span", { class: "field__label", text: t("paymentLink") }), payInput),
+    el("label", { class: "field field--tight" },
+      el("span", { class: "field__label", text: t("paymentNote") }), payNoteInput),
+    el("button", {
+      class: "btn btn--primary btn--block btn--sm", type: "button", text: t("saveChanges"),
+      onclick: () => {
+        const v = payInput.value.trim();
+        if (v && /^http:\/\//i.test(v)) return toast(t("badPayUrl"), "bad");
+        save({ payment_url: v || null, payment_note: payNoteInput.value.trim() || null });
+      },
+    })
   );
 }
 
