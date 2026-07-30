@@ -2467,7 +2467,7 @@ return {render, destroy, sharing};
 /* ===== money.js ===== */
 const __mod_money = (function () {
 const {sb, state, el, clear, toast, errText, isAdmin, shortDate, todayISO,
-  riderCount, activeRiders, primaryCount, isCasual, dayRate, paymentUrl, paymentNote, isDriver,} = __mod_core;
+  riderCount, activeRiders, primaryCount, primaryRiders, isCasual, dayRate, paymentUrl, paymentNote, isDriver,} = __mod_core;
 const {t} = __mod_i18n;
 let periods = [];
 let payments = [];
@@ -2521,22 +2521,41 @@ function casualTotal(period) {
     .reduce((sum, m) => sum + daysIn(m.id, period) * dayRate(), 0);
 }
 
-// نصيب المشترك الواحد = (إجمالي الفترة − اللي جه من اللي بالمرة) ÷ عدد المشتركين
-// بيتحسب وقت العرض، فلو حد جديد دخل النصيب بيقل لوحده
+// بنقسّم بجنيهات صحيحة والباقي بيتوزّع، عشان مجموع النصيب
+// يساوي الإجمالي بالظبط. 3000 على 7 = أربعة بـ429 وتلاتة بـ428، مش 428.57 للكل.
+function subscriberShares(period) {
+  const subs = primaryRiders()
+    .slice()
+    .sort((a, b) => String(a.id).localeCompare(String(b.id)));   // ترتيب ثابت
+  const map = new Map();
+  const n = subs.length;
+  if (!n) return map;
+
+  const net = Math.max(0, periodTotal(period) - casualTotal(period));
+  const base = Math.floor(net / n);
+  let extra = Math.round(net - base * n);      // الجنيهات الزيادة
+
+  subs.forEach((m, i) => map.set(m.id, base + (i < extra ? 1 : 0)));
+  return map;
+}
+
 function shareOf(period) {
-  const subs = primaryCount();
-  if (!subs) return 0;
-  const total = period.total_amount != null
-    ? Number(period.total_amount)
-    : Number(period.amount || 0) * subs;   // فترات قديمة
-  const net = Math.max(0, total - casualTotal(period));
-  return Math.round((net / subs) * 100) / 100;
+  const map = subscriberShares(period);
+  const vals = [...map.values()];
+  return vals.length ? vals[0] : 0;
+}
+
+// أقل وأعلى نصيب — عشان نعرضهم صح لو فيه فرق جنيه
+function shareRange(period) {
+  const vals = [...subscriberShares(period).values()];
+  if (!vals.length) return null;
+  return { min: Math.min(...vals), max: Math.max(...vals) };
 }
 
 // اللي على الراكب في الفترة دي
 function owed(member, period) {
   if (isCasual(member)) return daysIn(member.id, period) * dayRate();
-  return shareOf(period);
+  return subscriberShares(period).get(member.id) ?? 0;
 }
 
 function periodTotal(period) {
@@ -2588,6 +2607,7 @@ function paint(shell) {
       const target = riders.reduce((sum, r) => sum + owed(r, p), 0);
       const got = riders.filter((r) => payRow(p.id, r.id)?.paid)
         .reduce((sum, r) => sum + owed(r, p), 0);
+      const paidCount = riders.filter((r) => payRow(p.id, r.id)?.paid).length;
       shell.append(el("section", { class: "card" },
         el("div", { class: "card__head" },
           el("div", {},
@@ -2603,7 +2623,8 @@ function paint(shell) {
           ),
           el("div", {},
             el("p", { class: "card__label", text: t("stillOut") }),
-            el("p", { class: "mono splitnum splitnum--due", text: money(target - got) })
+            el("p", { class: "mono splitnum splitnum--due", text: money(target - got) }),
+            el("p", { class: "hint mono", text: `${paidCount}/${riders.length}` })
           )
         )
       ));
@@ -2674,7 +2695,12 @@ function paint(shell) {
         el("div", {},
           el("h3", { class: "card__title", text: p.label }),
           el("p", { class: "hint mono", text: `${shortDate(p.start_date)} — ${shortDate(p.end_date)} · ${money(periodTotal(p))} ${t("currency")} ${t("perPeriod")}` }),
-          el("p", { class: "hint", text: t("shareNow", `${money(shareOf(p))} ${t("currency")}`, primaryCount()) }),
+          el("p", { class: "hint", text: (() => {
+            const r = shareRange(p);
+            if (!r) return t("noRiders");
+            const txt = r.min === r.max ? `${r.min}` : `${r.min}–${r.max}`;
+            return t("shareNow", `${txt} ${t("currency")}`, primaryCount());
+          })() }),
           casualTotal(p) > 0
             ? el("p", { class: "hint hint--calc", text: t("casualCredit", `${money(casualTotal(p))} ${t("currency")}`) })
             : null
